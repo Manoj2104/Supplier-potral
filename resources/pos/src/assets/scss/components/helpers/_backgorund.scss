@@ -1,8 +1,0 @@
-@import "../variables";
-
-@each $name, $color in $theme-colors-palette {
-    .bg-#{$name} {
-        background-color: $color !important;
-    }
-}
-
