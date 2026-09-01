@@ -31,7 +31,7 @@ class CloudLicenseServerService
             'HOST' => 'aws-0-ap-south-1.pooler.supabase.com',
             'PORT' => '6543',
             'USER' => 'postgres.xzduxvifiancdgnrrgew',
-            'PASS' => 'Manojnandhini@2104',
+            'PASS' => 'Manojnandhini@2103',
             'DB'   => 'postgres',
             'URL'  => 'https://xzduxvifiancdgnrrgew.supabase.co',
             'SECRET_KEY' => 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHV4dmlmaWFuY2RnbnJyZ2V3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjE3ODc3OSwiZXhwIjoyMTAxNzU0Nzc5fQ.7Z1VKcSUN8_486ytN1Y8R0QSKROM44LBaJ_XYmMHeDY',
