@@ -1,0 +1,601 @@
+/* ═══════════════════════════════════════════════════════════════════
+   PREMIUM ENTERPRISE SUPPLIERS MANAGEMENT & CREATE SUPPLIER CSS
+   100% Consistent with Brands / Units / Base Units Design Language
+   ═══════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+    --brand-bg-main: #F8FAFC;
+    --brand-card-bg: #FFFFFF;
+    --brand-border: #EEF2F7;
+    --brand-border-subtle: #E2E8F0;
+    --brand-primary: #15803D;
+    --brand-primary-hover: #166534;
+    --brand-text-dark: #0F172A;
+    --brand-text-muted: #64748B;
+    --brand-text-light: #94A3B8;
+    --brand-radius-xl: 24px;
+    --brand-radius-lg: 16px;
+    --brand-radius-md: 12px;
+    --brand-radius-pill: 999px;
+    --brand-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+}
+
+.supp-workspace-wrapper,
+.brand-page-container {
+    padding: 24px 32px 48px 32px;
+    background: var(--brand-bg-main);
+    min-height: 100vh;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+/* ─── Breadcrumb ─────────────────────────────────────────────────── */
+.brand-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--brand-text-muted);
+    font-weight: 500;
+    margin-bottom: 12px;
+}
+
+.brand-crumb-active {
+    color: var(--brand-primary) !important;
+    font-weight: 700 !important;
+}
+
+/* ─── Header Section ─────────────────────────────────────────────── */
+.brand-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.brand-title-group h1 {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--brand-text-dark);
+    margin: 0 0 4px 0;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-title-group p {
+    font-size: 13.5px;
+    color: var(--brand-text-muted);
+    margin: 0;
+}
+
+.brand-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* ─── Pill Buttons (Consistent with Brands) ─────────────────────── */
+.brand-btn-pill {
+    height: 42px;
+    padding: 0 20px;
+    border-radius: var(--brand-radius-pill);
+    font-size: 13.5px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 180ms ease;
+    border: 1px solid var(--brand-border-subtle);
+    background: #FFFFFF;
+    color: var(--brand-text-dark);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.brand-btn-pill:hover {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+    color: #0F172A;
+    transform: translateY(-1px);
+}
+
+.brand-btn-pill.brand-btn-primary {
+    background: var(--brand-primary);
+    color: #FFFFFF;
+    border-color: var(--brand-primary);
+    box-shadow: 0 4px 14px rgba(21, 128, 61, 0.25);
+}
+
+.brand-btn-pill.brand-btn-primary:hover {
+    background: var(--brand-primary-hover);
+    border-color: var(--brand-primary-hover);
+    box-shadow: 0 6px 18px rgba(21, 128, 61, 0.35);
+}
+
+.brand-btn-pill.portal-btn {
+    background: #EFF6FF;
+    border-color: #BFDBFE;
+    color: #1D4ED8;
+}
+
+.brand-btn-pill.portal-btn:hover {
+    background: #DBEAFE;
+    border-color: #93C5FD;
+}
+
+/* ─── 4 KPI Summary Cards Grid ───────────────────────────────────── */
+.brand-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+    .brand-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .brand-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.brand-kpi-card {
+    background: var(--brand-card-bg);
+    border: 1px solid var(--brand-border);
+    border-radius: var(--brand-radius-lg);
+    padding: 22px;
+    box-shadow: var(--brand-shadow);
+    transition: all 200ms ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.brand-kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
+    border-color: #CBD5E1;
+}
+
+.brand-kpi-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.brand-kpi-label {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--brand-text-muted);
+}
+
+.brand-kpi-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+}
+
+.brand-kpi-icon.green { background: #DCFCE7; color: #15803D; }
+.brand-kpi-icon.blue { background: #EFF6FF; color: #2563EB; }
+.brand-kpi-icon.purple { background: #F3E8FF; color: #9333EA; }
+.brand-kpi-icon.orange { background: #FEF3C7; color: #D97706; }
+
+.brand-kpi-value {
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--brand-text-dark);
+    line-height: 1.1;
+    margin-bottom: 14px;
+    letter-spacing: -0.02em;
+}
+
+.brand-kpi-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.brand-kpi-badge {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: var(--brand-radius-pill);
+}
+
+.brand-kpi-badge.up { background: #DCFCE7; color: #15803D; }
+.brand-kpi-badge.neutral { background: #F1F5F9; color: #475569; }
+
+/* ─── Main Workspace Card ────────────────────────────────────────── */
+.brand-workspace {
+    background: var(--brand-card-bg);
+    border: 1px solid var(--brand-border);
+    border-radius: 20px;
+    box-shadow: var(--brand-shadow);
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+/* ─── Search & Filter Bar ────────────────────────────────────────── */
+.brand-filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.brand-search-box {
+    position: relative;
+    flex: 1;
+    min-width: 260px;
+}
+
+.brand-search-box input {
+    width: 100%;
+    height: 44px;
+    padding: 0 16px 0 42px;
+    border-radius: 12px;
+    border: 1.5px solid var(--brand-border-subtle);
+    font-size: 13.5px;
+    background: #F8FAFC;
+    color: var(--brand-text-dark);
+    font-weight: 500;
+    transition: all 180ms ease;
+}
+
+.brand-search-box input:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+    background: #FFFFFF;
+    box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.12);
+}
+
+.brand-search-icon {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--brand-text-light);
+    font-size: 14px;
+    pointer-events: none;
+}
+
+.brand-filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.brand-select-filter {
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--brand-border-subtle);
+    background: #F8FAFC;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--brand-text-dark);
+    cursor: pointer;
+    transition: all 180ms ease;
+}
+
+.brand-select-filter:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+    background: #FFFFFF;
+}
+
+/* Quick Filter Pills */
+.supp-pill-group {
+    display: flex;
+    align-items: center;
+    background: #F1F5F9;
+    border-radius: var(--brand-radius-pill);
+    padding: 3px;
+    gap: 3px;
+}
+
+.supp-pill-btn {
+    height: 36px;
+    padding: 0 14px;
+    border-radius: var(--brand-radius-pill);
+    border: none;
+    background: transparent;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--brand-text-muted);
+    cursor: pointer;
+    transition: all 150ms ease;
+}
+
+.supp-pill-btn:hover {
+    color: var(--brand-text-dark);
+}
+
+.supp-pill-btn.active {
+    background: #FFFFFF;
+    color: var(--brand-primary);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+    font-weight: 700;
+}
+
+.supp-btn-reset {
+    height: 44px;
+    padding: 0 16px;
+    border-radius: 12px;
+    border: 1.5px solid var(--brand-border-subtle);
+    background: #FFFFFF;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--brand-text-muted);
+    cursor: pointer;
+    transition: all 180ms ease;
+}
+
+.supp-btn-reset:hover {
+    background: #F8FAFC;
+    color: var(--brand-text-dark);
+    border-color: #CBD5E1;
+}
+
+/* ─── Table Architecture ─────────────────────────────────────────── */
+.supp-table-card {
+    background: #FFFFFF;
+    border: 1px solid var(--brand-border);
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.02);
+    overflow: hidden;
+}
+
+.supp-data-table {
+    width: 100%;
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.supp-data-table thead th {
+    background: #F8FAFC;
+    color: #64748B;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 14px 18px;
+    border-bottom: 1px solid #EEF2F7;
+    border-top: none;
+    text-transform: uppercase;
+}
+
+.supp-data-table tbody td {
+    padding: 14px 18px;
+    border-bottom: 1px solid #F1F5F9;
+    vertical-align: middle;
+}
+
+.supp-data-table tbody tr:hover td {
+    background: #FAFCFF;
+}
+
+.supp-data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Supplier Avatar */
+.supp-avatar-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #FFFFFF;
+    font-size: 13.5px;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+}
+
+.supp-code-badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: #F1F5F9;
+    color: #475569;
+    font-size: 11.5px;
+    font-weight: 700;
+    font-family: monospace;
+}
+
+.supp-status-active {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: var(--brand-radius-pill);
+    background: #DCFCE7;
+    color: #15803D;
+    font-size: 11.5px;
+    font-weight: 700;
+    border: 1px solid #BBF7D0;
+}
+
+/* Action Buttons in Table */
+.brand-action-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--brand-border-subtle);
+    background: #FFFFFF;
+    color: var(--brand-text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: all 150ms ease;
+    text-decoration: none;
+}
+
+.brand-action-btn:hover {
+    background: #F8FAFC;
+    color: var(--brand-text-dark);
+    border-color: #CBD5E1;
+}
+
+.brand-action-btn.edit:hover { background: #EFF6FF; color: #2563EB; border-color: #93C5FD; }
+.brand-action-btn.delete:hover { background: #FEF2F2; color: #EF4444; border-color: #FCA5A5; }
+
+/* ─── Pagination Footer ──────────────────────────────────────────── */
+.brand-pagination-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #FFFFFF;
+    border-top: 1px solid var(--brand-border);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.brand-page-info {
+    font-size: 13px;
+    color: var(--brand-text-muted);
+    font-weight: 500;
+}
+
+.brand-page-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.brand-page-btn {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid var(--brand-border-subtle);
+    background: #FFFFFF;
+    color: var(--brand-text-dark);
+    font-size: 12.5px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 150ms ease;
+}
+
+.brand-page-btn:hover:not(:disabled) {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+}
+
+.brand-page-btn.active {
+    background: var(--brand-primary);
+    color: #FFFFFF;
+    border-color: var(--brand-primary);
+}
+
+.brand-page-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* ─── Fullpage Create / Edit Supplier Container ──────────────────── */
+.sup-create-page {
+    padding: 24px 32px 40px 32px;
+    background: var(--brand-bg-main);
+    min-height: 100vh;
+}
+
+.create-fullpage-container {
+    background: #FFFFFF;
+    border-radius: var(--brand-radius-xl);
+    border: 1px solid var(--brand-border);
+    box-shadow: var(--brand-shadow);
+    overflow: hidden;
+}
+
+.create-form-header {
+    padding: 24px 32px;
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--brand-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.create-form-body {
+    padding: 32px;
+    background: #F8FAFC;
+}
+
+.create-card-section {
+    background: #FFFFFF;
+    border: 1px solid var(--brand-border);
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.02);
+    margin-bottom: 24px;
+}
+
+.create-section-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.create-section-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #DCFCE7;
+    color: #15803D;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.create-section-icon.blue { background: #EFF6FF; color: #2563EB; }
+.create-section-icon.purple { background: #F3E8FF; color: #9333EA; }
+.create-section-icon.orange { background: #FEF3C7; color: #D97706; }
+.create-section-icon.green { background: #DCFCE7; color: #15803D; }
+
+.create-section-title h3 {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--brand-text-dark);
+    margin: 0 0 2px 0;
+}
+
+.create-section-title p {
+    font-size: 13px;
+    color: var(--brand-text-muted);
+    margin: 0;
+}

@@ -1,0 +1,960 @@
+/* ═══════════════════════════════════════════════════════════════════
+   PREMIUM SAAS BACKGROUND SYSTEM  (Donezo / Linear / Stripe style)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── 1. Font Family ──────────────────────────────────────────────── */
+.dashboard-page,
+.dashboard-page * {
+    font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+/* ─── 2. Wrapper — transparent so body gradient shows through ────── */
+.wrapper,
+.wrapper-res {
+    background: transparent !important;
+    position: relative !important;
+    isolation: isolate !important;
+}
+
+/* Noise Grain Texture — extremely subtle (1–2% opacity) */
+.wrapper::before,
+.wrapper-res::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 220px 220px;
+    opacity: 0.018;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ─── 3. Base dashboard-page ───────────────────────────────────────── */
+.hero-sales-card {
+    background: linear-gradient(135deg, #16A34A 0%, #15803D 50%, #166534 100%) !important;
+    background-color: #16A34A !important;
+    color: #FFFFFF !important;
+    border: none !important;
+}
+
+.hero-sales-card .hero-badge,
+span.hero-badge {
+    background-color: #FFFFFF !important;
+    background: #FFFFFF !important;
+    color: #15803D !important;
+    font-weight: 800 !important;
+}
+
+.hero-sales-card .hero-badge * {
+    color: #15803D !important;
+}
+
+.dashboard-page {
+    position: relative !important;
+    z-index: 1 !important;
+    padding: 20px 0 40px 0 !important;
+    min-height: 100vh !important;
+    background: transparent !important;
+}
+
+/* ─── 4. Floating Glassmorphism Workspace ──────────────────────────── */
+.dashboard-page.premium-workspace {
+    margin: 12px 0 32px !important;
+    padding: 28px 24px !important;
+    border-radius: 20px !important;
+    background: rgba(255, 255, 255, 0.72) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.80) !important;
+    box-shadow:
+        0 0 0 1px rgba(15, 23, 42, 0.04),
+        0 8px 32px rgba(15, 23, 42, 0.06),
+        0 32px 64px rgba(15, 23, 42, 0.04) !important;
+    min-height: unset !important;
+    overflow: hidden !important;
+}
+
+/* ─── 5. Content depth hierarchy ─────────────────────────────────── */
+
+/* Level 1: Workspace surface */
+.dashboard-page {
+    background: transparent !important;
+}
+
+/* Level 2: Cards sit above workspace */
+.dashboard-page .card,
+.dashboard-panel {
+    background: #FFFFFF !important;
+    border: 1px solid #EEF2F7 !important;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04) !important;
+    border-radius: 24px !important;
+    position: relative !important;
+    z-index: 2 !important;
+}
+
+/* Featured Green Card Override for First Card */
+.dashboard-page .dashboard-widget.featured-green .card,
+.dashboard-page .card.bg-green-card,
+.dashboard-widget.featured-green .card {
+    background: linear-gradient(135deg, #15803D 0%, #166534 100%) !important;
+    border: none !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 10px 25px rgba(22, 101, 52, 0.25) !important;
+}
+
+.dashboard-page .dashboard-widget.featured-green .card *,
+.dashboard-page .card.bg-green-card *,
+.dashboard-widget.featured-green .card * {
+    color: #FFFFFF !important;
+}
+
+.dashboard-page .dashboard-widget.featured-green .card .kpi-icon-circle,
+.dashboard-page .card.bg-green-card .kpi-icon-circle,
+.dashboard-widget.featured-green .card .kpi-icon-circle {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: #FFFFFF !important;
+}
+
+.dashboard-page .dashboard-widget.featured-green .card .kpi-icon-circle *,
+.dashboard-page .card.bg-green-card .kpi-icon-circle *,
+.dashboard-widget.featured-green .card .kpi-icon-circle * {
+    color: #FFFFFF !important;
+}
+
+/* Level 3: Table container */
+.data-table,
+.dashboard-page .rdt_TableWrapper,
+.dashboard-page [class*="ReactDataTable"] {
+    position: relative !important;
+    z-index: 2 !important;
+}
+
+/* ─── 6. Section spacing ─────────────────────────────────────────── */
+.dashboard-page .row {
+    --bs-gutter-x: 24px !important;
+    --bs-gutter-y: 24px !important;
+}
+
+/* ─── 7. Dividers use soft color ─────────────────────────────────── */
+.dashboard-panel table th,
+.dashboard-panel table td {
+    border-color: #EEF2F7 !important;
+}
+
+hr {
+    border-color: #EEF2F7 !important;
+    opacity: 1 !important;
+}
+
+/* ─── 8. Premium backdrop for content div ────────────────────────── */
+.content {
+    background: transparent !important;
+}
+
+/* ─── 9. DataTable inside dashboard-page — no double borders ─────── */
+.dashboard-page .data-table .rdt_TableHead .rdt_TableHeadRow,
+.dashboard-page .rdt_TableHeadRow {
+    background: #F8FAFC !important;
+}
+
+.dashboard-page .rdt_TableRow {
+    background: transparent !important;
+}
+
+/* ─── 10. Card hover lift (depth animation) ──────────────────────── */
+.dashboard-page .card {
+    transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────── */
+/* RETAINED: Dashboard Intro Layout                                    */
+/* ─────────────────────────────────────────────────────────────────── */
+
+.dashboard-intro {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 32px !important;
+}
+
+.dashboard-title {
+    font-size: 42px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+    letter-spacing: -1px !important;
+    margin-bottom: 6px !important;
+}
+
+.dashboard-subtitle {
+    font-size: 16px !important;
+    font-weight: 400 !important;
+    color: #94A3B8 !important;
+    margin: 0 !important;
+}
+
+.dashboard-actions {
+    display: flex !important;
+    gap: 16px !important;
+}
+
+/* Button Overrides */
+.dashboard-add-button {
+    background-color: #15803D !important;
+    color: #FFFFFF !important;
+    border-radius: 999px !important;
+    height: 52px !important;
+    padding: 0 28px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    border: none !important;
+    transition: all 250ms ease !important;
+    text-decoration: none !important;
+    box-shadow: 0 4px 12px rgba(21, 128, 61, 0.15) !important;
+}
+
+.dashboard-add-button:hover {
+    background-color: #166534 !important;
+    color: #FFFFFF !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(21, 128, 61, 0.25) !important;
+}
+
+.dashboard-import-button {
+    background-color: #FFFFFF !important;
+    color: #15803D !important;
+    border: 1px solid #15803D !important;
+    border-radius: 999px !important;
+    height: 52px !important;
+    padding: 0 28px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    transition: all 250ms ease !important;
+    text-decoration: none !important;
+}
+
+.dashboard-import-button:hover {
+    background-color: #F0FDF4 !important;
+    color: #15803D !important;
+    transform: translateY(-2px) !important;
+}
+
+/* KPI Cards Widget */
+.dashboard-widget {
+    transition: all 250ms ease !important;
+}
+
+.dashboard-widget:hover {
+    transform: translateY(-4px) !important;
+}
+
+.dashboard-widget .card {
+    border-radius: 24px !important;
+    border: 1px solid #EEF2F6 !important;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04) !important;
+    padding: 24px !important;
+    min-height: 150px !important;
+    transition: all 250ms ease !important;
+}
+
+/* Featured Green Card */
+.dashboard-widget.featured-green .card {
+    background: linear-gradient(135deg, #15803D 0%, #166534 100%) !important;
+    border: none !important;
+    box-shadow: 0 10px 25px rgba(22, 101, 52, 0.25) !important;
+}
+
+/* Circular Icon Wrapper */
+.dashboard-widget .kpi-icon-circle {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: transform 250ms ease !important;
+}
+
+.dashboard-widget:hover .kpi-icon-circle {
+    transform: scale(1.05) !important;
+}
+
+/* Premium Panel */
+.dashboard-panel {
+    background: #FFFFFF !important;
+    border-radius: 24px !important;
+    border: 1px solid #EEF2F6 !important;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04) !important;
+    padding: 24px !important;
+    margin-bottom: 24px !important;
+    transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.dashboard-panel:hover {
+    transform: translateY(-4px) !important;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08) !important;
+}
+
+.dashboard-panel .card-header {
+    border-bottom: none !important;
+    background: transparent !important;
+    padding: 0 0 20px 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+.dashboard-panel .card-header h5 {
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+    letter-spacing: -0.5px !important;
+}
+
+.dashboard-panel .card-header h5 span {
+    font-size: 14px !important;
+    color: #94A3B8 !important;
+    font-weight: 400 !important;
+    margin-left: 6px !important;
+}
+
+.dashboard-panel .card-body {
+    padding: 0 !important;
+}
+
+/* Period Button */
+.dashboard-period-button {
+    background-color: #FFFFFF !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 10px !important;
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    cursor: pointer !important;
+    transition: all 200ms ease !important;
+}
+
+.dashboard-period-button:hover {
+    border-color: #CBD5E1 !important;
+    background-color: #F8FAFC !important;
+}
+
+.dashboard-view-button {
+    background-color: #F0FDF4 !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #15803D !important;
+    cursor: pointer !important;
+    transition: all 200ms ease !important;
+}
+
+.dashboard-view-button:hover {
+    background-color: #DCFCE7 !important;
+}
+
+/* Table inside panels */
+.dashboard-panel table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+}
+
+.dashboard-panel table th {
+    background-color: #F8FAFC !important;
+    color: #64748B !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.8px !important;
+    padding: 14px 20px !important;
+    border-bottom: 1px solid #EEF2F7 !important;
+}
+
+.dashboard-panel table td {
+    padding: 16px 20px !important;
+    font-size: 14px !important;
+    color: #334155 !important;
+    font-weight: 500 !important;
+    border-bottom: 1px solid #F1F5F9 !important;
+    vertical-align: middle !important;
+}
+
+.dashboard-panel table tr {
+    transition: background-color 150ms ease !important;
+}
+
+.dashboard-panel table tr:hover td {
+    background-color: #F9FAFB !important;
+}
+
+.dashboard-panel table tr:last-child td {
+    border-bottom: none !important;
+}
+
+/* Status Badges */
+.badge.bg-light-success,
+.badge.status-completed,
+.badge.payment-paid {
+    background-color: #DCFCE7 !important;
+    color: #15803D !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    padding: 6px 12px !important;
+    border-radius: 8px !important;
+}
+
+.badge.bg-light-primary,
+.badge.status-pending,
+.badge.payment-unpaid {
+    background-color: #FEF3C7 !important;
+    color: #D97706 !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    padding: 6px 12px !important;
+    border-radius: 8px !important;
+}
+
+.badge.bg-light-warning,
+.badge.status-ordered,
+.badge.status-cancelled {
+    background-color: #FEE2E2 !important;
+    color: #EF4444 !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    padding: 6px 12px !important;
+    border-radius: 8px !important;
+}
+
+/* Ranking Lists */
+.ranking-list-item {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 16px 0 !important;
+    border-bottom: 1px solid #F1F5F9 !important;
+}
+
+.ranking-list-item:last-child { border-bottom: none !important; }
+
+.ranking-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+}
+
+.ranking-number {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    color: #94A3B8 !important;
+    width: 24px !important;
+}
+
+.ranking-avatar {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    background-color: #F0FDF4 !important;
+    color: #15803D !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    border: 1px solid #DCFCE7 !important;
+}
+
+.ranking-info {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+}
+
+.ranking-name {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #111827 !important;
+}
+
+.ranking-subtext {
+    font-size: 12px !important;
+    color: #64748B !important;
+}
+
+.ranking-right { text-align: right !important; }
+
+.ranking-value {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+
+.ranking-trend {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: #16A34A !important;
+    background-color: #DCFCE7 !important;
+    padding: 2px 6px !important;
+    border-radius: 6px !important;
+    display: inline-block !important;
+    margin-top: 4px !important;
+}
+
+/* Product rank row */
+.product-rank-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+    width: 100% !important;
+}
+
+.product-rank-image {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 10px !important;
+    object-fit: cover !important;
+    background-color: #F8FAFC !important;
+    border: 1px solid #E2E8F0 !important;
+}
+
+.product-rank-details {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+}
+
+.product-rank-header {
+    display: flex !important;
+    justify-content: space-between !important;
+}
+
+.product-rank-name {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #111827 !important;
+}
+
+.product-rank-stats {
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+
+.product-rank-progress-container {
+    width: 100% !important;
+    height: 6px !important;
+    background-color: #F1F5F9 !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+}
+
+.product-rank-progress-fill {
+    height: 100% !important;
+    background-color: #22C55E !important;
+    border-radius: 10px !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────── */
+/* RESPONSIVE — consistent spacing on all viewports                   */
+/* ─────────────────────────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+    .dashboard-page.premium-workspace {
+        margin: 16px 12px 32px !important;
+        padding: 24px !important;
+        border-radius: 20px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-page.premium-workspace {
+        margin: 8px 6px 24px !important;
+        padding: 16px !important;
+        border-radius: 16px !important;
+    }
+    .dashboard-page {
+        padding: 12px 0 24px 0 !important;
+    }
+}
+
+@keyframes widgetPulse {
+    0%, 100% {
+        opacity: 0.45;
+    }
+    50% {
+        opacity: 0.9;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────────── */
+/* 1.5s PREMIUM REFRESH BLUR-PULSE ANIMATIONS                          */
+/* ─────────────────────────────────────────────────────────────────── */
+.dashboard-blur-pulse-active {
+    animation: dashboardCardGlow 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.dashboard-value-pulse {
+    animation: dashboardValueBlurReveal 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.dashboard-chart-pulse {
+    animation: dashboardChartReveal 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes dashboardValueBlurReveal {
+    0% {
+        filter: blur(8px);
+        opacity: 0.15;
+        transform: scale(0.92) translateY(4px);
+    }
+    45% {
+        filter: blur(4px);
+        opacity: 0.7;
+        transform: scale(1.03) translateY(-1px);
+    }
+    100% {
+        filter: blur(0px);
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes dashboardCardGlow {
+    0% {
+        box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+        transform: translateY(6px);
+        opacity: 0.6;
+    }
+    50% {
+        box-shadow: 0 10px 30px rgba(22, 163, 74, 0.12);
+        transform: translateY(-2px);
+        opacity: 0.9;
+    }
+    100% {
+        box-shadow: 0 10px 35px rgba(15, 23, 42, 0.08);
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes dashboardChartReveal {
+    0% {
+        filter: blur(6px);
+        opacity: 0.2;
+        transform: scale(0.96);
+    }
+    60% {
+        filter: blur(2px);
+        opacity: 0.8;
+        transform: scale(1.01);
+    }
+    100% {
+        filter: blur(0px);
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PREMIUM ENTERPRISE SKELETON SHIMMER SYSTEM (Linear / Stripe style)
+   ═══════════════════════════════════════════════════════════════════ */
+.skeleton {
+    background: #F1F5F9;
+    background: linear-gradient(
+        90deg,
+        #F1F5F9 0%,
+        #E2E8F0 30%,
+        #F8FAFC 50%,
+        #E2E8F0 70%,
+        #F1F5F9 100%
+    );
+    background-size: 250% 100%;
+    animation: skeletonShimmer 1.4s ease-in-out infinite;
+    display: inline-block;
+    position: relative;
+    overflow: hidden;
+}
+
+@keyframes skeletonShimmer {
+    0% {
+        background-position: 100% 0;
+    }
+    100% {
+        background-position: -100% 0;
+    }
+}
+
+.dashboard-reveal-container {
+    opacity: 1;
+    transition: opacity 180ms ease;
+}
+
+.dashboard-reveal-container.revealing {
+    animation: dashboardFadeIn 180ms ease forwards;
+}
+
+@keyframes dashboardFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton {
+        animation: none !important;
+        background: #E2E8F0 !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ULTRA-PREMIUM STOCK ALERT WIDGET CSS
+   ═══════════════════════════════════════════════════════════════════ */
+.stock-alert-card {
+    border-radius: 20px !important;
+    background: #FFFFFF !important;
+    border: 1px solid #EEF2F7 !important;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.stock-alert-card:hover {
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08) !important;
+    border-color: #E2E8F0 !important;
+}
+
+.stock-alert-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #F1F5F9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.stock-alert-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stock-alert-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.stock-alert-icon-box.danger {
+    background: #FEE2E2;
+    color: #DC2626;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
+}
+
+.stock-alert-icon-box.healthy {
+    background: #DCFCE7;
+    color: #16A34A;
+}
+
+.stock-alert-filter-pill {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    background: #F8FAFC;
+    color: #64748B;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stock-alert-filter-pill:hover {
+    background: #F1F5F9;
+    color: #0F172A;
+}
+
+.stock-alert-filter-pill.active {
+    background: #0F172A;
+    color: #FFFFFF;
+    border-color: #0F172A;
+}
+
+.stock-alert-filter-pill.active-critical {
+    background: #DC2626;
+    color: #FFFFFF;
+    border-color: #DC2626;
+}
+
+/* Stock Alert Item Row */
+.stock-alert-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid #F1F5F9;
+    background: #FFFFFF;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: inherit;
+}
+
+.stock-alert-item:hover {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+.stock-alert-item.critical {
+    border-left: 3.5px solid #DC2626;
+}
+
+.stock-alert-item.warning {
+    border-left: 3.5px solid #F59E0B;
+}
+
+.stock-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.stock-progress-track {
+    width: 100%;
+    height: 4.5px;
+    background: #F1F5F9;
+    border-radius: 99px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.stock-progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.3s ease;
+}
+
+.stock-progress-fill.danger {
+    background: linear-gradient(90deg, #DC2626, #EF4444);
+}
+
+.stock-progress-fill.warning {
+    background: linear-gradient(90deg, #D97706, #F59E0B);
+}
+
+/* Status Badges */
+.stock-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.1px;
+    white-space: nowrap;
+}
+
+.stock-badge.out-of-stock {
+    background: #FEE2E2;
+    color: #DC2626;
+    border: 1px solid #FECACA;
+}
+
+.stock-badge.critical {
+    background: #FEF2F2;
+    color: #B91C1C;
+    border: 1px solid #FEE2E2;
+}
+
+.stock-badge.low {
+    background: #FFFBEB;
+    color: #B45309;
+    border: 1px solid #FDE68A;
+}
+
+.stock-action-btn {
+    padding: 4px 10px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #2563EB;
+    background: #EFF6FF;
+    border: 1px solid #DBEAFE;
+    border-radius: 8px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.stock-action-btn:hover {
+    background: #2563EB;
+    color: #FFFFFF;
+    border-color: #2563EB;
+}
+
+/* Sleek Slim Scrollbar for Stock Alert */
+.stock-alert-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+
+.stock-alert-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.stock-alert-scroll::-webkit-scrollbar-thumb {
+    background: #E2E8F0;
+    border-radius: 99px;
+}
+
+.stock-alert-scroll::-webkit-scrollbar-thumb:hover {
+    background: #CBD5E1;
+}
+
+
+
+

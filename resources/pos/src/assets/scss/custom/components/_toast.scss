@@ -1,0 +1,75 @@
+@import "~react-toastify/scss/main";
+@import "../../components/variables";
+
+.Toastify {
+    z-index: 999999;
+
+    &__toast {
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12) !important;
+        border-radius: 14px !important;
+        min-height: 72px !important;
+        border: 1px solid #E2E8F0 !important;
+        background: #FFFFFF !important;
+        padding: 14px 18px !important;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    }
+
+    &__toast-container {
+        width: 380px !important;
+        opacity: 1;
+        padding: 12px !important;
+    }
+
+    &__progress-bar {
+        height: 3.5px !important;
+        background: linear-gradient(90deg, #16A34A 0%, #15803D 100%) !important;
+        border-radius: 0 0 14px 14px !important;
+        opacity: 1 !important;
+    }
+
+    &__progress-bar--error {
+        background: linear-gradient(90deg, #DC2626 0%, #B91C1C 100%) !important;
+    }
+
+    &__close-button {
+        display: none !important;
+    }
+}
+
+.toast-card {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    margin-right: 0 !important;
+
+    &__toast-title {
+        color: #0F172A;
+        font-weight: 700;
+        font-size: 14.5px;
+        margin-bottom: 2px !important;
+    }
+
+    &__toast-message {
+        color: #475569;
+        font-size: 12.5px;
+        margin-bottom: 0 !important;
+        line-height: 1.35;
+    }
+}
+
+.Toastify__toast-container--top-right {
+    top: 1.25em !important;
+    right: 1.25em !important;
+}
+
+@media (max-width: 480px) {
+    .Toastify__toast-container--top-right {
+        min-width: 300px;
+        max-width: 90%;
+        top: 1em !important;
+        right: 5%;
+        left: 5%;
+    }
+}
+
+.Toastify__toast--rtl {
+    direction: ltr;
+}

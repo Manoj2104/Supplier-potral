@@ -1,0 +1,472 @@
+/* ═══════════════════════════════════════════════════════════════════
+   CREATE QUOTATION WORKSPACE (Matching Brands Design Language)
+   ═══════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+.quo-create-page,
+.quo-create-page * {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    box-sizing: border-box;
+}
+
+.quo-create-page {
+    padding: 24px 32px 40px 32px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    background: #F8FAFC;
+    min-height: calc(100vh - 60px);
+}
+
+/* ─── Breadcrumb ─────────────────────────────────────────────────── */
+.brand-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #64748B;
+    font-weight: 500;
+    margin-bottom: 16px;
+}
+
+.brand-crumb-active {
+    color: #15803D !important;
+    font-weight: 700 !important;
+}
+
+/* ─── Fullpage Container ─────────────────────────────────────────── */
+.create-fullpage-container {
+    background: #FFFFFF !important;
+    border-radius: 28px !important;
+    border: 1px solid #EEF2F7 !important;
+    box-shadow: 0 10px 40px rgba(15, 23, 42, 0.04) !important;
+    overflow: hidden !important;
+    animation: fadeIn 200ms ease;
+    margin-bottom: 30px;
+}
+
+/* ─── Header Bar ─────────────────────────────────────────────────── */
+.create-form-header {
+    padding: 24px 32px !important;
+    background: #FFFFFF !important;
+    border-bottom: 1px solid #EEF2F7 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+    gap: 16px !important;
+}
+
+.create-form-body {
+    padding: 32px !important;
+    background: #F8FAFC !important;
+}
+
+/* ─── Section Card ───────────────────────────────────────────────── */
+.create-card-section {
+    background: #FFFFFF !important;
+    border: 1px solid #EEF2F7 !important;
+    border-radius: 24px !important;
+    padding: 32px !important;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.03) !important;
+    margin-bottom: 24px !important;
+}
+
+.create-section-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.create-section-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: #DCFCE7;
+    color: #15803D;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.create-section-icon.blue { background: #EFF6FF; color: #2563EB; }
+.create-section-icon.purple { background: #F3E8FF; color: #9333EA; }
+.create-section-icon.orange { background: #FEF3C7; color: #D97706; }
+.create-section-icon.green { background: #DCFCE7; color: #15803D; }
+
+.create-section-title h3 {
+    font-size: 20px !important;
+    font-weight: 800 !important;
+    color: #0F172A !important;
+    margin: 0 0 4px 0 !important;
+    line-height: 1.2 !important;
+}
+
+.create-section-title p {
+    font-size: 13px !important;
+    color: #64748B !important;
+    margin: 0 !important;
+}
+
+/* ─── Form Inputs & Controls ─────────────────────────────────────── */
+.quo-create-page .form-label,
+.create-form-body .form-label {
+    font-size: 13.5px !important;
+    font-weight: 700 !important;
+    color: #0F172A !important;
+    margin-bottom: 8px !important;
+    display: block !important;
+}
+
+.create-input-lg,
+.quo-create-page input.form-control:not(.create-search-input),
+.quo-create-page select.form-select,
+.quo-create-page .react-select__control,
+.quo-create-page [class*="-control"],
+.quo-create-page .datepicker__custom-datepicker {
+    height: 48px !important;
+    min-height: 48px !important;
+    border-radius: 12px !important;
+    border: 1.5px solid #E2E8F0 !important;
+    font-size: 14px !important;
+    padding: 0 16px !important;
+    background: #F8FAFC !important;
+    color: #0F172A !important;
+    transition: all 180ms ease !important;
+    box-shadow: none !important;
+    width: 100% !important;
+}
+
+.create-input-lg:focus,
+.quo-create-page input.form-control:not(.create-search-input):focus,
+.quo-create-page select.form-select:focus,
+.quo-create-page .react-select__control--is-focused,
+.quo-create-page [class*="-control"]:focus,
+.quo-create-page .datepicker__custom-datepicker:focus {
+    background: #FFFFFF !important;
+    border-color: #15803D !important;
+    box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.12) !important;
+    outline: none !important;
+}
+
+/* Hide standalone required asterisks in create page */
+.quo-create-page .form-group .required {
+    display: none !important;
+}
+
+/* DatePicker container fix */
+.quo-create-page .datepicker {
+    position: relative !important;
+    width: 100% !important;
+}
+
+.quo-create-page .datepicker .input-icon {
+    position: absolute !important;
+    right: 16px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: #64748B !important;
+    pointer-events: none !important;
+    font-size: 15px !important;
+}
+
+/* Reference No input */
+.quo-create-page input.create-ref-input {
+    height: 48px !important;
+    min-height: 48px !important;
+    border-radius: 12px !important;
+    border: 1.5px solid #E2E8F0 !important;
+    background: #F8FAFC !important;
+    padding: 0 16px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #64748B !important;
+    width: 100% !important;
+}
+
+/* Pill Buttons */
+.brand-btn-pill {
+    height: 46px !important;
+    padding: 0 22px !important;
+    border-radius: 999px !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    transition: all 180ms ease !important;
+    border: 1.5px solid #E2E8F0 !important;
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.02) !important;
+    text-decoration: none !important;
+}
+
+.brand-btn-pill:hover {
+    background: #F1F5F9 !important;
+    border-color: #CBD5E1 !important;
+    color: #0F172A !important;
+    transform: translateY(-1px) !important;
+}
+
+.brand-btn-pill.brand-btn-primary {
+    background: #15803D !important;
+    color: #FFFFFF !important;
+    border-color: #15803D !important;
+    box-shadow: 0 4px 14px rgba(21, 128, 61, 0.25) !important;
+}
+
+.brand-btn-pill.brand-btn-primary:hover {
+    background: #166534 !important;
+    border-color: #166534 !important;
+    box-shadow: 0 6px 18px rgba(21, 128, 61, 0.35) !important;
+}
+
+/* ─── InputGroup Inline Fix ──────────────────────────────────────── */
+.quo-create-page .input-group {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    position: relative !important;
+}
+
+.quo-create-page .input-group > .form-control,
+.quo-create-page .input-group > input.form-control {
+    flex: 1 1 auto !important;
+    width: 1% !important;
+    min-width: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 12px !important;
+    border-bottom-left-radius: 12px !important;
+    border-right: none !important;
+}
+
+.quo-create-page .input-group > .input-group-text {
+    height: 48px !important;
+    border-top-right-radius: 12px !important;
+    border-bottom-right-radius: 12px !important;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border: 1.5px solid #E2E8F0 !important;
+    border-left: 1px solid #E2E8F0 !important;
+    background: #F1F5F9 !important;
+    color: #475569 !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    padding: 0 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+}
+
+.quo-create-page .input-group:focus-within > .input-group-text {
+    border-color: #15803D !important;
+    background: #DCFCE7 !important;
+    color: #15803D !important;
+}
+
+/* Live Financial Calculation Box */
+.quo-financial-summary-box {
+    background: #F8FAFC;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 20px;
+    padding: 20px 28px;
+    margin-top: 24px;
+}
+
+.quo-financial-stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.quo-financial-lbl {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 4px;
+}
+
+.quo-financial-val {
+    font-size: 19px;
+    font-weight: 800;
+    color: #0F172A;
+}
+
+.quo-grand-total-pill {
+    background: linear-gradient(135deg, #15803D 0%, #166534 100%);
+    border-radius: 16px;
+    padding: 14px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    box-shadow: 0 6px 20px rgba(21, 128, 61, 0.25);
+    margin-left: auto;
+}
+
+.quo-grand-pill-lbl {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #DCFCE7;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 2px;
+}
+
+.quo-grand-pill-val {
+    font-size: 24px;
+    font-weight: 900;
+    color: #FFFFFF;
+    line-height: 1.1;
+}
+
+/* Empty State */
+.quo-empty-state {
+    padding: 48px 24px;
+    text-align: center;
+    border: 2px dashed #E2E8F0;
+    border-radius: 16px;
+    background: #F8FAFC;
+    margin-top: 16px;
+}
+
+.quo-empty-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: #EFF6FF;
+    color: #3B82F6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin: 0 auto 16px;
+}
+
+.quo-empty-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0F172A;
+    margin-bottom: 6px;
+}
+
+.quo-empty-desc {
+    font-size: 13.5px;
+    color: #64748B;
+    margin-bottom: 0;
+}
+
+/* ProductRowTable Custom Styling in Quotations */
+.quo-create-page .custom-responsive table {
+    width: 100% !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+}
+
+.quo-create-page .custom-responsive th {
+    background: #F8FAFC !important;
+    color: #64748B !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    padding: 14px 16px !important;
+    border-bottom: 1.5px solid #E2E8F0 !important;
+}
+
+.quo-create-page .custom-responsive td {
+    padding: 14px 16px !important;
+    vertical-align: middle !important;
+}
+
+.quo-create-page .custom-qty {
+    max-width: 130px !important;
+}
+
+.quo-create-page .custom-qty .input-group {
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    border: 1px solid #CBD5E1 !important;
+}
+
+.quo-create-page .custom-qty .btn-primary,
+.quo-create-page .custom-qty .input-group-text {
+    background-color: #15803D !important;
+    border: none !important;
+    color: #FFFFFF !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+}
+
+/* ─── Search Bar Styling (Matching Adjustments) ──────────────────── */
+.quo-create-page .create-search-wrap {
+    position: relative !important;
+    width: 100% !important;
+}
+
+.quo-create-page .create-search-wrap .create-search-icon {
+    position: absolute !important;
+    left: 18px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: #64748B !important;
+    font-size: 16px !important;
+    z-index: 5 !important;
+    pointer-events: none !important;
+}
+
+.quo-create-page .create-search-wrap input.create-search-input {
+    height: 50px !important;
+    min-height: 50px !important;
+    border-radius: 14px !important;
+    border: 1.5px solid #E2E8F0 !important;
+    background: #F8FAFC !important;
+    padding-left: 50px !important;
+    padding-right: 44px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    font-size: 14px !important;
+    color: #0F172A !important;
+    width: 100% !important;
+    transition: all 180ms ease !important;
+    box-shadow: none !important;
+}
+
+.quo-create-page .create-search-wrap input.create-search-input:focus {
+    background: #FFFFFF !important;
+    border-color: #15803D !important;
+    box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.12) !important;
+    outline: none !important;
+}
+
+.quo-create-page .create-search-wrap .create-search-clear {
+    position: absolute !important;
+    right: 14px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    background: transparent !important;
+    border: none !important;
+    color: #94A3B8 !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    z-index: 5 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 4px !important;
+}
+
+.quo-create-page .create-search-wrap .create-search-clear:hover {
+    color: #0F172A !important;
+}
+

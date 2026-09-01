@@ -1,0 +1,6 @@
+/* SubscriptionPage — Full-width, no extra padding */
+.subscription-full-page {
+    width: 100%;
+    min-height: 100vh;
+    background: #f4f6fb;
+}

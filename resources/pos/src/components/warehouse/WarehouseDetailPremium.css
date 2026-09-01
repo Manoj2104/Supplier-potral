@@ -1,0 +1,177 @@
+/* =============================================
+   ENTERPRISE WAREHOUSE DETAIL DASHBOARD (Ref Image 3)
+   ============================================= */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+* { box-sizing: border-box; }
+.wd-page { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #F8FAFC; min-height: 100vh; color: #0F172A; padding-bottom: 80px; }
+
+/* ── Top Bar ── */
+.wd-topbar {
+  background: #ffffff; border-bottom: 1px solid #E2E8F0;
+  padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 90; box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+.wd-back-btn {
+  display: inline-flex; align-items: center; gap: 6px; background: #fff;
+  border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 14px;
+  font-size: 13px; font-weight: 600; color: #334155; cursor: pointer;
+  text-decoration: none; transition: all .15s ease;
+}
+.wd-back-btn:hover { background: #F8FAFC; border-color: #94A3B8; color: #0F172A; }
+
+.wd-topbar-title h1 { font-size: 20px; font-weight: 800; color: #0F172A; margin: 0 0 2px 0; }
+.wd-topbar-title p  { font-size: 12.5px; color: #64748B; margin: 0; }
+.wd-topbar-actions  { display: flex; align-items: center; gap: 8px; }
+
+/* Buttons */
+.wd-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+  border-radius: 8px; font-size: 12.5px; font-weight: 600; border: none;
+  cursor: pointer; transition: all .15s ease; white-space: nowrap;
+}
+.wd-btn-outline { background: #fff; border: 1px solid #CBD5E1; color: #334155; }
+.wd-btn-outline:hover { background: #F8FAFC; border-color: #94A3B8; color: #0F172A; }
+.wd-btn-primary { background: linear-gradient(135deg, #16A34A 0%, #15803D 100%); color: #fff; box-shadow: 0 2px 6px rgba(22,163,74,.25); }
+.wd-btn-primary:hover { background: linear-gradient(135deg, #15803D 0%, #166534 100%); transform: translateY(-1px); }
+
+/* ── Warehouse Profile Card (Image 3) ── */
+.wd-profile-card {
+  background: #ffffff; border: 1px solid #E2E8F0; border-radius: 16px;
+  padding: 20px 24px; margin: 20px 24px 0 24px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+.wd-profile-left { display: flex; align-items: center; gap: 16px; }
+.wd-avatar-box {
+  width: 58px; height: 58px; border-radius: 50%; background: #16A34A;
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 26px; flex-shrink: 0; position: relative;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
+}
+.wd-avatar-edit {
+  position: absolute; bottom: 0; right: 0; width: 20px; height: 20px;
+  background: #fff; border: 1px solid #CBD5E1; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 10px; color: #475569;
+}
+.wd-name-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.wd-name-title { font-size: 20px; font-weight: 800; color: #0F172A; margin: 0; }
+.wd-badge-active {
+  background: #DCFCE7; color: #166534; font-size: 11px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid #BBF7D0;
+}
+.wd-badge-type {
+  background: #F3E8FF; color: #7E22CE; font-size: 11px; font-weight: 700;
+  padding: 3px 10px; border-radius: 6px; border: 1px solid #E9D5FF;
+}
+.wd-meta-row { display: flex; align-items: center; gap: 18px; font-size: 12px; color: #64748B; flex-wrap: wrap; }
+.wd-meta-item strong { color: #0F172A; font-weight: 700; margin-left: 3px; }
+
+/* ── KPI Analytics Row (8 Cards) ── */
+.wd-kpi-row {
+  display: flex; gap: 12px; padding: 18px 24px; overflow-x: auto; background: #ffffff; border-bottom: 1px solid #E2E8F0;
+  margin-top: 16px;
+}
+.wd-kpi-row::-webkit-scrollbar { height: 4px; }
+.wd-kpi-row::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 2px; }
+
+.wd-kpi-card {
+  min-width: 145px; flex: 1; background: #ffffff; border: 1px solid #E2E8F0;
+  border-radius: 12px; padding: 14px 16px; cursor: pointer; transition: all .2s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+}
+.wd-kpi-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); transform: translateY(-2px); border-color: #CBD5E1; }
+.wd-kpi-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.wd-kpi-icon {
+  width: 26px; height: 26px; border-radius: 6px; display: flex;
+  align-items: center; justify-content: center; background: var(--kpi-bg, #F0FDF4); color: var(--kpi-color, #16A34A);
+}
+.wd-kpi-icon svg { width: 14px; height: 14px; }
+.wd-kpi-lbl { font-size: 11.5px; font-weight: 700; color: #64748B; }
+.wd-kpi-val { font-size: 19px; font-weight: 800; color: #0F172A; line-height: 1.1; margin-bottom: 4px; }
+.wd-kpi-trend { font-size: 10.5px; font-weight: 600; color: #16A34A; display: flex; align-items: center; gap: 3px; }
+.wd-sparkline { height: 26px; width: 100%; margin-top: 4px; }
+
+/* ── Filter Toolbar (Image 3) ── */
+.wd-toolbar {
+  display: flex; align-items: center; gap: 10px; padding: 14px 24px;
+  background: #ffffff; border-bottom: 1px solid #E2E8F0; flex-wrap: wrap;
+}
+.wd-search-wrap { position: relative; flex: 1; min-width: 240px; max-width: 380px; }
+.wd-search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: #94A3B8; }
+.wd-search-input {
+  width: 100%; padding: 8px 12px 8px 36px; border: 1.5px solid #E2E8F0;
+  border-radius: 10px; font-size: 12.5px; color: #0F172A; background: #F8FAFC;
+  outline: none; transition: all .15s ease; font-weight: 500;
+}
+.wd-search-input:focus { border-color: #16A34A; background: #fff; box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+
+.wd-select {
+  padding: 8px 12px; border: 1.5px solid #E2E8F0; border-radius: 10px;
+  font-size: 12.5px; color: #334155; background: #F8FAFC; outline: none; cursor: pointer; font-weight: 600;
+}
+.wd-select:focus { border-color: #16A34A; background: #FFFFFF; }
+
+/* ── Main Layout Split ── */
+.wd-content-layout { display: flex; gap: 20px; padding: 20px 24px; align-items: flex-start; }
+.wd-table-area { flex: 1; min-width: 0; background: #ffffff; border: 1px solid #E2E8F0; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03); }
+.wd-sidebar-area { width: 310px; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 80px; }
+
+/* ── Table (Image 3 Exact Column Formatting) ── */
+.wd-table-wrap { overflow-x: auto; }
+.wd-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.wd-table thead th {
+  padding: 12px 14px; text-align: left; font-size: 10.5px; font-weight: 800;
+  color: #64748B; text-transform: uppercase; letter-spacing: .5px;
+  background: #F8FAFC; border-bottom: 1px solid #E2E8F0; white-space: nowrap;
+}
+.wd-table tbody tr { border-bottom: 1px solid #F1F5F9; transition: background .12s ease; cursor: pointer; }
+.wd-table tbody tr:hover { background: #F8FAFC; }
+.wd-table td { padding: 12px 14px; vertical-align: middle; white-space: nowrap; }
+
+/* Product Image Cell */
+.wd-prod-cell { display: flex; align-items: center; gap: 12px; }
+.wd-prod-img {
+  width: 40px; height: 40px; border-radius: 8px; object-fit: cover;
+  border: 1px solid #E2E8F0; background: #FFFFFF; flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.wd-prod-name { font-weight: 700; color: #0F172A; font-size: 13px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wd-sku-tag { font-family: monospace; font-size: 11px; font-weight: 700; background: #F1F5F9; color: #475569; padding: 3px 8px; border-radius: 6px; border: 1px solid #E2E8F0; }
+.wd-cat-tag { font-size: 11px; font-weight: 700; color: #2563EB; background: #EFF6FF; padding: 3px 8px; border-radius: 6px; }
+
+.wd-status-pill {
+  padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-block;
+}
+.wd-status-pill.instock { background: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
+.wd-status-pill.lowstock { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+.wd-status-pill.outstock { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+
+/* ── Sidebar Cards (Ref Image 3) ── */
+.wd-side-card { background: #ffffff; border: 1px solid #E2E8F0; border-radius: 16px; padding: 18px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03); }
+.wd-side-title { font-size: 13.5px; font-weight: 800; color: #0F172A; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+.wd-side-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #F1F5F9; font-size: 12px; }
+.wd-side-row:last-child { border-bottom: none; }
+.wd-side-lbl { color: #64748B; font-weight: 600; }
+.wd-side-val { font-weight: 700; color: #0F172A; }
+
+/* Inventory Health Grid (6 Mini Cards) */
+.wd-health-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.wd-health-item { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px 8px; text-align: center; }
+.wd-health-lbl { font-size: 10px; font-weight: 700; color: #64748B; margin-bottom: 2px; }
+.wd-health-val { font-size: 14px; font-weight: 800; color: #0F172A; }
+
+/* ── Pagination Footer ── */
+.wd-pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 22px; background: #ffffff; border-top: 1px solid #E2E8F0;
+  flex-wrap: wrap; gap: 10px;
+}
+.wd-pag-info { font-size: 12px; color: #64748B; font-weight: 600; }
+.wd-pag-ctrls { display: flex; align-items: center; gap: 4px; }
+.wd-pag-btn {
+  min-width: 32px; height: 32px; border-radius: 8px; border: 1px solid #E2E8F0;
+  background: #fff; font-size: 12.5px; font-weight: 700; color: #334155;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.wd-pag-btn.active { background: #16A34A; color: #fff; border-color: #16A34A; }

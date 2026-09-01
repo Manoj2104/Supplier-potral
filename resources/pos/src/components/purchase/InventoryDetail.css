@@ -1,0 +1,253 @@
+/* Inventory Detail Page CSS - SAP Fiori & Oracle WMS Inspired */
+
+.inv-detail-container {
+    padding: 24px;
+    background: #F8FAFC;
+    min-height: calc(100vh - 70px);
+    color: #0F172A;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Header & Back Navigation */
+.inv-detail-top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.inv-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #334155;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.02);
+}
+.inv-back-btn:hover {
+    background: #F1F5F9;
+    color: #0F172A;
+    border-color: #CBD5E1;
+}
+
+.inv-detail-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Hero Header Card */
+.inv-hero-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
+    margin-bottom: 24px;
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+.inv-hero-img {
+    width: 120px;
+    height: 120px;
+    border-radius: 16px;
+    object-fit: contain;
+    background: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    padding: 8px;
+    flex-shrink: 0;
+}
+
+.inv-hero-info {
+    flex: 1;
+}
+
+.inv-hero-title {
+    font-size: 22px;
+    font-weight: 900;
+    color: #0F172A;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.4px;
+}
+
+.inv-hero-meta {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.inv-hero-sku {
+    font-family: monospace;
+    font-weight: 800;
+    color: #2563EB;
+    background: #EFF6FF;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.inv-hero-tag {
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748B;
+    background: #F1F5F9;
+    padding: 4px 10px;
+    border-radius: 8px;
+}
+
+.inv-hero-stats {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.inv-stat-box {
+    background: #F8FAFC;
+    border: 1px solid #F1F5F9;
+    border-radius: 14px;
+    padding: 12px 18px;
+    min-width: 130px;
+}
+.inv-stat-lbl {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
+}
+.inv-stat-val {
+    font-size: 18px;
+    font-weight: 900;
+    color: #0F172A;
+}
+
+/* Tabs Header */
+.inv-tabs-bar {
+    display: flex;
+    gap: 8px;
+    border-bottom: 2px solid #E2E8F0;
+    margin-bottom: 24px;
+}
+
+.inv-tab-item {
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #64748B;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.inv-tab-item.active {
+    color: #16A34A;
+    border-bottom-color: #16A34A;
+}
+
+/* Main Grid Layout */
+.inv-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 20px;
+}
+
+.inv-section-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 18px;
+    padding: 20px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.02);
+}
+
+.inv-section-header {
+    font-size: 15px;
+    font-weight: 900;
+    color: #0F172A;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.inv-info-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+}
+
+.inv-info-table td {
+    padding: 6px 0;
+    font-size: 13.5px;
+}
+.inv-info-table td.label {
+    color: #64748B;
+    font-weight: 700;
+    width: 42%;
+}
+.inv-info-table td.value {
+    color: #0F172A;
+    font-weight: 800;
+    text-align: right;
+}
+
+/* Stock Movement Visual Timeline */
+.inv-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+    padding-left: 24px;
+}
+.inv-timeline::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: #E2E8F0;
+}
+
+.inv-timeline-step {
+    position: relative;
+}
+.inv-timeline-dot {
+    position: absolute;
+    left: -24px;
+    top: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #16A34A;
+    color: #FFFFFF;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #FFFFFF;
+    box-shadow: 0 0 0 2px #DCFCE7;
+}
+
+.inv-timeline-title {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #0F172A;
+}
+.inv-timeline-sub {
+    font-size: 11.5px;
+    color: #64748B;
+    font-weight: 600;
+}

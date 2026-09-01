@@ -1,0 +1,235 @@
+/* ===================================================================
+   REGISTER MANAGEMENT ENTERPRISE CSS
+   Targeting: Cash Drop, Cash Pickup, Suspend, Reopen, History, Shift Reports & Today's Summary
+   Aesthetics: SAP Fiori, NetSuite, Stripe Dashboard & Modern Enterprise POS
+   =================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+.reg-mgmt-container {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  color: #0F172A;
+  padding: 24px;
+  background: #F8FAFC;
+  min-height: 100vh;
+}
+
+/* ── Breadcrumb & Header ─────────────────────────────────────────── */
+.reg-mgmt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.reg-mgmt-title {
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  color: #0F172A !important;
+  letter-spacing: -0.4px !important;
+  margin-bottom: 4px !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reg-mgmt-sub {
+  font-size: 12.5px;
+  color: #64748B;
+  margin: 0;
+}
+
+.reg-btn {
+  height: 40px !important;
+  padding: 0 16px !important;
+  border-radius: 10px !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.15s ease !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+}
+
+.reg-btn-outline {
+  background: #FFFFFF !important;
+  color: #334155 !important;
+  border: 1px solid #CBD5E1 !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
+.reg-btn-outline:hover {
+  background: #F8FAFC !important;
+  border-color: #94A3B8 !important;
+  color: #0F172A !important;
+}
+
+.reg-btn-primary {
+  background: #16A34A !important;
+  color: #FFFFFF !important;
+  border: 1px solid #16A34A !important;
+  box-shadow: 0 2px 8px rgba(22,163,74,0.3) !important;
+}
+
+.reg-btn-primary:hover {
+  background: #15803D !important;
+  border-color: #15803D !important;
+}
+
+/* ── KPI Grid ────────────────────────────────────────────────────── */
+.reg-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.reg-kpi-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.reg-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.reg-kpi-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.reg-kpi-val {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0F172A;
+  margin: 6px 0 4px 0;
+}
+
+.reg-kpi-sub {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+/* ── Split Layouts ───────────────────────────────────────────────── */
+.reg-split-2 {
+  display: grid;
+  grid-template-columns: 68% 32%;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .reg-split-2 { grid-template-columns: 1fr; }
+}
+
+.reg-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
+}
+
+.reg-card-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0F172A;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Denomination Table Counter ─────────────────────────────────── */
+.denomi-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+
+.denomi-table td {
+  padding: 8px 12px;
+  background: #F8FAFC;
+  border-top: 1px solid #E2E8F0;
+  border-bottom: 1px solid #E2E8F0;
+  font-size: 12.5px;
+}
+
+.denomi-table td:first-child {
+  border-left: 1px solid #E2E8F0;
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.denomi-table td:last-child {
+  border-right: 1px solid #E2E8F0;
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+  font-weight: 800;
+  color: #16A34A;
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.denomi-input {
+  width: 90px !important;
+  height: 34px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+}
+
+/* ── Timeline Widget ─────────────────────────────────────────────── */
+.reg-timeline-item {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 16px;
+  position: relative;
+}
+
+.reg-timeline-item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 24px;
+  bottom: 0;
+  width: 2px;
+  background: #E2E8F0;
+}
+
+.reg-timeline-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #FFFFFF;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+/* Badges & Tables */
+.reg-badge-success { background: #DCFCE7; color: #15803D; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 10.5px; }
+.reg-badge-warning { background: #FEF3C7; color: #D97706; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 10.5px; }
+.reg-badge-danger { background: #FEE2E2; color: #DC2626; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 10.5px; }
+.reg-badge-info { background: #EFF6FF; color: #2563EB; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 10.5px; }
