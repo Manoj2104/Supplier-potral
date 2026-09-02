@@ -770,13 +770,13 @@ const SalesForm = (props) => {
                                             <thead>
                                                 <tr>
                                                     <th>{getFormattedMessage('product.title')}</th>
-                                                    <th>{getFormattedMessage('sale.order-item.table.net-unit-cost.column.label')}</th>
-                                                    <th>{getFormattedMessage('sale.order-item.table.stock.column.label')}</th>
-                                                    <th className="text-lg-start text-center">{getFormattedMessage('sale.order-item.table.qty.column.label')}</th>
-                                                    <th>{getFormattedMessage('sale.order-item.table.discount.column.label')}</th>
-                                                    <th>{getFormattedMessage('sale.order-item.table.tax.column.label')}</th>
-                                                    <th>{getFormattedMessage('sale.order-item.table.sub-total.column.label')}</th>
-                                                    <th>{getFormattedMessage('react-data-table.action.column.label')}</th>
+                                                    <th>{getFormattedMessage('sale.order-item.table.net-unit-price.column.label')}</th>
+                                                    <th>{getFormattedMessage('purchase.order-item.table.stock.column.label')}</th>
+                                                    <th className="text-lg-start text-center">{getFormattedMessage('purchase.order-item.table.qty.column.label')}</th>
+                                                    <th>{getFormattedMessage('purchase.order-item.table.discount.column.label')}</th>
+                                                    <th>{getFormattedMessage('purchase.order-item.table.tax.column.label')}</th>
+                                                    <th>{getFormattedMessage('purchase.order-item.table.sub-total.column.label')}</th>
+                                                    <th className="text-center">{getFormattedMessage('react-data-table.action.column.label')}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
