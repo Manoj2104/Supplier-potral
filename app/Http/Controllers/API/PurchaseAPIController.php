@@ -289,124 +289,123 @@ class PurchaseAPIController extends AppBaseController
 
     public function inboundPlanningData(Request $request): JsonResponse
     {
-        $purchases = Purchase::with([
-            'supplier:id,name',
-            'warehouse:id,name',
-            'purchaseItems:id,purchase_id,product_id,quantity,product_cost,net_unit_cost,sub_total',
-            'purchaseItems.product:id,name,code'
-        ])->orderByDesc('id')->get();
+        $cachedData = \Illuminate\Support\Facades\Cache::remember('inbound_planning_data_v2', 60, function () {
+            $purchases = Purchase::with([
+                'supplier:id,name',
+                'warehouse:id,name',
+                'purchaseItems:id,purchase_id,product_id,quantity,product_cost,net_unit_cost,sub_total',
+                'purchaseItems.product:id,name,code'
+            ])->orderByDesc('id')->get();
 
-        $asns = SupplierAsn::select([
-            'id', 'purchase_id', 'asn_number', 'status', 'transport_company',
-            'vehicle_number', 'driver_name', 'driver_mobile', 'lr_number',
-            'dispatch_date', 'expected_arrival'
-        ])->get()->keyBy('purchase_id');
+            $asns = SupplierAsn::select([
+                'id', 'purchase_id', 'asn_number', 'status', 'transport_company',
+                'vehicle_number', 'driver_name', 'driver_mobile', 'lr_number',
+                'dispatch_date', 'expected_arrival'
+            ])->get()->keyBy('purchase_id');
 
-        $items = [];
-        $expectedToday = 0;
-        $waitingAsn = 0;
-        $asnCreated = 0;
-        $shipmentsInTransit = 0;
-        $totalQty = 0;
-        $totalVal = 0;
+            $items = [];
+            $expectedToday = 0;
+            $waitingAsn = 0;
+            $asnCreated = 0;
+            $shipmentsInTransit = 0;
+            $totalQty = 0;
+            $totalVal = 0;
 
-        $todayStr = \Carbon\Carbon::today()->toDateString();
+            $todayStr = \Carbon\Carbon::today()->toDateString();
 
-        foreach ($purchases as $idx => $po) {
-            $asn = $asns->get($po->id);
-            $stockQty = ($po->purchaseItems && $po->purchaseItems->count() > 0) ? (int)$po->purchaseItems->sum('quantity') : 1;
-            $val = (float) ($po->grand_total ?: 0);
-            $totalQty += $stockQty;
-            $totalVal += $val;
+            foreach ($purchases as $idx => $po) {
+                $asn = $asns->get($po->id);
+                $stockQty = ($po->purchaseItems && $po->purchaseItems->count() > 0) ? (int)$po->purchaseItems->sum('quantity') : 1;
+                $val = (float) ($po->grand_total ?: 0);
+                $totalQty += $stockQty;
+                $totalVal += $val;
 
-            $status = self::deriveLifecycleStatus($po, $asn);
+                $status = self::deriveLifecycleStatus($po, $asn);
 
-            if ($status === 'Ready for ASN' || $status === 'Waiting for ASN' || $status === 'Waiting for Approval' || $status === 'Pending Receiving' || $status === 'Preparing') {
-                $waitingAsn++;
-            } elseif ($status === 'ASN Created') {
-                $asnCreated++;
-            } elseif ($status === 'In Transit' || $status === 'Dispatched' || $status === 'Out for Delivery' || $status === 'Delivered' || $status === 'Ready to Receive') {
-                $shipmentsInTransit++;
-            }
+                if ($status === 'Ready for ASN' || $status === 'Waiting for ASN' || $status === 'Waiting for Approval' || $status === 'Pending Receiving' || $status === 'Preparing') {
+                    $waitingAsn++;
+                } elseif ($status === 'ASN Created') {
+                    $asnCreated++;
+                } elseif ($status === 'In Transit' || $status === 'Dispatched' || $status === 'Out for Delivery' || $status === 'Delivered' || $status === 'Ready to Receive') {
+                    $shipmentsInTransit++;
+                }
 
-            if ($po->date && (\Carbon\Carbon::parse($po->date)->isToday() || \Carbon\Carbon::parse($po->date)->toDateString() === $todayStr)) {
-                $expectedToday++;
-            }
+                if ($po->date && (\Carbon\Carbon::parse($po->date)->isToday() || \Carbon\Carbon::parse($po->date)->toDateString() === $todayStr)) {
+                    $expectedToday++;
+                }
 
-            $poRef = $po->reference_code ?: ('PO-2026-' . str_pad($po->id, 6, '0', STR_PAD_LEFT));
+                $poRef = $po->reference_code ?: ('PO-2026-' . str_pad($po->id, 6, '0', STR_PAD_LEFT));
 
-            $asnStatus = $asn ? strtolower(trim($asn->status ?? '')) : null;
-            $hasGrn = $asn && in_array($asnStatus, ['arrived', 'verified', 'partial', 'putaway_in_progress', 'putaway_completed', 'delivered', 'completed']);
-            $grnNumber = $hasGrn ? ('GRN-2026-' . str_pad($asn->id + 120, 5, '0', STR_PAD_LEFT)) : '—';
-            $isGrnCompleted = $asn && in_array($asnStatus, ['arrived', 'putaway_completed', 'delivered', 'completed']);
-            $isPartial = ($asnStatus === 'partial');
+                $asnStatus = $asn ? strtolower(trim($asn->status ?? '')) : null;
+                $hasGrn = $asn && in_array($asnStatus, ['arrived', 'verified', 'partial', 'putaway_in_progress', 'putaway_completed', 'delivered', 'completed']);
+                $grnNumber = $hasGrn ? ('GRN-2026-' . str_pad($asn->id + 120, 5, '0', STR_PAD_LEFT)) : '—';
+                $isGrnCompleted = $asn && in_array($asnStatus, ['arrived', 'putaway_completed', 'delivered', 'completed']);
+                $isPartial = ($asnStatus === 'partial');
 
-            $receivedQty = $isGrnCompleted ? $stockQty : ($isPartial ? max(1, $stockQty - 1) : 0);
-            $remainingQty = max(0, $stockQty - $receivedQty);
+                $receivedQty = $isGrnCompleted ? $stockQty : ($isPartial ? max(1, $stockQty - 1) : 0);
+                $remainingQty = max(0, $stockQty - $receivedQty);
 
-            $grnStatus = 'Pending Receiving';
-            if ($isGrnCompleted) {
-                $grnStatus = 'Completed';
-            } elseif ($isPartial) {
-                $grnStatus = 'Partially Received';
-            } elseif ($asnStatus === 'receiving') {
-                $grnStatus = 'Receiving in Progress';
-            } elseif ($asnStatus === 'out_for_delivery') {
-                $grnStatus = 'Out for Delivery';
-            } elseif ($asnStatus === 'in_transit') {
-                $grnStatus = 'In Transit';
-            } elseif ($asnStatus === 'dispatched' || $asnStatus === 'accepted') {
-                $grnStatus = 'Dispatched';
-            } elseif ($asnStatus === 'arrived' || $asnStatus === 'delivered') {
-                $grnStatus = 'Delivered';
-            } elseif ($asn) {
-                $grnStatus = ucfirst(str_replace('_', ' ', $asnStatus));
-            } elseif ($status === 'Ready for ASN') {
                 $grnStatus = 'Pending Receiving';
+                if ($isGrnCompleted) {
+                    $grnStatus = 'Completed';
+                } elseif ($isPartial) {
+                    $grnStatus = 'Partially Received';
+                } elseif ($asnStatus === 'receiving') {
+                    $grnStatus = 'Receiving in Progress';
+                } elseif ($asnStatus === 'out_for_delivery') {
+                    $grnStatus = 'Out for Delivery';
+                } elseif ($asnStatus === 'in_transit') {
+                    $grnStatus = 'In Transit';
+                } elseif ($asnStatus === 'dispatched' || $asnStatus === 'accepted') {
+                    $grnStatus = 'Dispatched';
+                } elseif ($asnStatus === 'arrived' || $asnStatus === 'delivered') {
+                    $grnStatus = 'Delivered';
+                } elseif ($asn) {
+                    $grnStatus = ucfirst(str_replace('_', ' ', $asnStatus));
+                } elseif ($status === 'Ready for ASN') {
+                    $grnStatus = 'Pending Receiving';
+                }
+
+                $items[] = [
+                    'id' => $po->id,
+                    'inbound_id' => 'INB-2026-' . str_pad($po->id, 5, '0', STR_PAD_LEFT),
+                    'po_id' => $poRef,
+                    'asn_id' => $asn ? $asn->asn_number : '—',
+                    'shipment_id' => ($asn && in_array(strtolower($asn->status ?? ''), ['in_transit', 'dispatched', 'accepted', 'arrived', 'completed', 'delivered', 'verified'])) ? ('SHP-2026-' . str_pad($asn->id, 5, '0', STR_PAD_LEFT)) : '—',
+                    'grn_number' => $grnNumber,
+                    'grn_status' => $grnStatus,
+                    'is_grn_completed' => $isGrnCompleted,
+                    'supplier' => $po->supplier ? $po->supplier->name : 'Supplier #' . $po->supplier_id,
+                    'warehouse' => $po->warehouse ? $po->warehouse->name : 'Suguna Warehouse',
+                    'stock_qty' => $stockQty . ' Units',
+                    'raw_qty' => $stockQty,
+                    'received_qty' => $receivedQty,
+                    'remaining_qty' => $remainingQty,
+                    'expected_delivery' => $po->date ? \Carbon\Carbon::parse($po->date)->format('d M Y, h:i A') : 'On schedule',
+                    'delivery_date' => $po->date ? \Carbon\Carbon::parse($po->date)->format('d M Y') : 'On schedule',
+                    'delivery_time' => $po->date ? \Carbon\Carbon::parse($po->date)->format('h:i A') : '12:00 PM',
+                    'status' => $status,
+                    'priority' => ($idx % 3 == 0) ? 'High' : (($idx % 2 == 0) ? 'Medium' : 'Low'),
+                    'vehicle_no' => ($asn && !empty($asn->vehicle_number)) ? $asn->vehicle_number : null,
+                    'transporter' => ($asn && !empty($asn->transport_company)) ? $asn->transport_company : null,
+                    'driver' => ($asn && !empty($asn->driver_name)) ? $asn->driver_name : null,
+                    'driver_mobile' => ($asn && !empty($asn->driver_mobile)) ? $asn->driver_mobile : null,
+                    'lr_number' => ($asn && !empty($asn->lr_number)) ? $asn->lr_number : null,
+                    'expected_cartons' => max(1, round($stockQty / 5)),
+                    'expected_weight' => (max(1, round($stockQty / 5)) * 20) . ' KG',
+                    'purchase_value' => '₹ ' . number_format($val, 2),
+                    'items' => $po->purchaseItems ? $po->purchaseItems->map(function($pi) {
+                        return [
+                            'name' => $pi->product ? $pi->product->name : 'Product Item',
+                            'sku' => $pi->product ? $pi->product->code : 'SKU',
+                            'quantity' => $pi->quantity,
+                            'unit_cost' => $pi->product_cost ?: 0
+                        ];
+                    })->toArray() : []
+                ];
             }
 
-            $items[] = [
-                'id' => $po->id,
-                'inbound_id' => 'INB-2026-' . str_pad($po->id, 5, '0', STR_PAD_LEFT),
-                'po_id' => $poRef,
-                'asn_id' => $asn ? $asn->asn_number : '—',
-                'shipment_id' => ($asn && in_array(strtolower($asn->status ?? ''), ['in_transit', 'dispatched', 'accepted', 'arrived', 'completed', 'delivered', 'verified'])) ? ('SHP-2026-' . str_pad($asn->id, 5, '0', STR_PAD_LEFT)) : '—',
-                'grn_number' => $grnNumber,
-                'grn_status' => $grnStatus,
-                'is_grn_completed' => $isGrnCompleted,
-                'supplier' => $po->supplier ? $po->supplier->name : 'Supplier #' . $po->supplier_id,
-                'warehouse' => $po->warehouse ? $po->warehouse->name : 'Suguna Warehouse',
-                'stock_qty' => $stockQty . ' Units',
-                'raw_qty' => $stockQty,
-                'received_qty' => $receivedQty,
-                'remaining_qty' => $remainingQty,
-                'expected_delivery' => $po->date ? \Carbon\Carbon::parse($po->date)->format('d M Y, h:i A') : 'On schedule',
-                'delivery_date' => $po->date ? \Carbon\Carbon::parse($po->date)->format('d M Y') : 'On schedule',
-                'delivery_time' => $po->date ? \Carbon\Carbon::parse($po->date)->format('h:i A') : '12:00 PM',
-                'status' => $status,
-                'priority' => ($idx % 3 == 0) ? 'High' : (($idx % 2 == 0) ? 'Medium' : 'Low'),
-                'vehicle_no' => ($asn && !empty($asn->vehicle_number)) ? $asn->vehicle_number : null,
-                'transporter' => ($asn && !empty($asn->transport_company)) ? $asn->transport_company : null,
-                'driver' => ($asn && !empty($asn->driver_name)) ? $asn->driver_name : null,
-                'driver_mobile' => ($asn && !empty($asn->driver_mobile)) ? $asn->driver_mobile : null,
-                'lr_number' => ($asn && !empty($asn->lr_number)) ? $asn->lr_number : null,
-                'expected_cartons' => max(1, round($stockQty / 5)),
-                'expected_weight' => (max(1, round($stockQty / 5)) * 20) . ' KG',
-                'purchase_value' => '₹ ' . number_format($val, 2),
-                'items' => $po->purchaseItems ? $po->purchaseItems->map(function($pi) {
-                    return [
-                        'name' => $pi->product ? $pi->product->name : 'Product Item',
-                        'sku' => $pi->product ? $pi->product->code : 'SKU',
-                        'quantity' => $pi->quantity,
-                        'unit_cost' => $pi->product_cost ?: 0
-                    ];
-                })->toArray() : []
-            ];
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => [
+            return [
                 'items' => $items,
                 'kpi' => [
                     'expected_today' => $expectedToday,
@@ -417,7 +416,12 @@ class PurchaseAPIController extends AppBaseController
                     'expected_quantity' => number_format($totalQty) . ' Units',
                     'expected_value' => '₹ ' . number_format($totalVal, 2),
                 ]
-            ]
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $cachedData
         ]);
     }
 
