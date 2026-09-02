@@ -76,20 +76,42 @@ return [
             'strict' => false,
         ],
 
-        'pgsql' => [
-            'driver' => 'pgsql',
-            'url' => env('DATABASE_URL'),
-            'host' => env('DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co'),
-            'port' => env('DB_PORT', '5432'),
-            'database' => env('DB_DATABASE', 'postgres'),
-            'username' => env('DB_USERNAME', 'postgres'),
-            'password' => env('DB_PASSWORD', 'Manojnandhini@2104'),
-            'charset' => 'utf8',
-            'prefix' => '',
-            'prefix_indexes' => true,
-            'search_path' => 'public',
-            'sslmode' => env('DB_SSLMODE', 'require'),
-        ],
+        'pgsql' => (function () {
+            $url = env('DATABASE_URL');
+            $host = env('DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co');
+            $port = env('DB_PORT', '5432');
+            $username = env('DB_USERNAME', 'postgres');
+            $password = env('DB_PASSWORD', 'Manojnandhini@2104');
+            $database = env('DB_DATABASE', 'postgres');
+
+            // Automatically resolve Supabase pooler overrides to Direct Connection
+            if (str_contains((string)$url, 'pooler.supabase.com')) {
+                $url = null;
+            }
+            if (str_contains((string)$host, 'pooler.supabase.com')) {
+                $host = 'db.ejbygpiozuaomomshazl.supabase.co';
+                $port = '5432';
+                $username = 'postgres';
+            }
+            if (str_starts_with((string)$username, 'postgres.')) {
+                $username = 'postgres';
+            }
+
+            return [
+                'driver' => 'pgsql',
+                'url' => $url,
+                'host' => $host,
+                'port' => $port,
+                'database' => $database,
+                'username' => $username,
+                'password' => $password,
+                'charset' => 'utf8',
+                'prefix' => '',
+                'prefix_indexes' => true,
+                'search_path' => 'public',
+                'sslmode' => env('DB_SSLMODE', 'require'),
+            ];
+        })(),
 
         'central_supabase' => [
             'driver' => 'pgsql',
