@@ -90,7 +90,9 @@ class PurchaseAPIController extends AppBaseController
 
     public function edit(Purchase $purchase): PurchaseResource
     {
-        $purchase = $purchase->load('purchaseItems.product.stocks', 'warehouse');
+        $purchase = \Illuminate\Support\Facades\Cache::remember('purchase_edit_' . $purchase->id, 30, function () use ($purchase) {
+            return $purchase->load('purchaseItems.product.stocks', 'warehouse', 'supplier');
+        });
 
         return new PurchaseResource($purchase);
     }

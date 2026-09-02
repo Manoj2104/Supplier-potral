@@ -88,7 +88,9 @@ class PurchaseReturnAPIController extends AppBaseController
 
     public function edit(PurchaseReturn $purchasesReturn): PurchaseReturnResource
     {
-        $purchasesReturn = $purchasesReturn->load('purchaseReturnItems.product.stocks', 'warehouse');
+        $purchasesReturn = \Illuminate\Support\Facades\Cache::remember('purchase_return_edit_' . $purchasesReturn->id, 30, function () use ($purchasesReturn) {
+            return $purchasesReturn->load('purchaseReturnItems.product.stocks', 'warehouse');
+        });
 
         return new PurchaseReturnResource($purchasesReturn);
     }

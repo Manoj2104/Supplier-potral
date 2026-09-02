@@ -68,7 +68,9 @@ class AdjustmentAPIController extends AppBaseController
 
     public function edit(Adjustment $adjustment): AdjustmentResource
     {
-        $adjustment = $adjustment->load('adjustmentItems.product.stocks', 'warehouse');
+        $adjustment = \Illuminate\Support\Facades\Cache::remember('adjustment_edit_' . $adjustment->id, 30, function () use ($adjustment) {
+            return $adjustment->load('adjustmentItems.product.stocks', 'warehouse');
+        });
 
         return new AdjustmentResource($adjustment);
     }

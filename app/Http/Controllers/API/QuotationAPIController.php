@@ -110,7 +110,9 @@ class QuotationAPIController extends AppBaseController
 
     public function edit(Quotation $quotation): QuotationResource
     {
-        $quotation = $quotation->load('quotationItems.product.stocks', 'warehouse');
+        $quotation = \Illuminate\Support\Facades\Cache::remember('quotation_edit_' . $quotation->id, 30, function () use ($quotation) {
+            return $quotation->load('quotationItems.product.stocks', 'warehouse', 'customer');
+        });
 
         return new QuotationResource($quotation);
     }
