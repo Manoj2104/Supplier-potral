@@ -3,8 +3,32 @@ use App\Models\Setting;
 use Illuminate\Support\Facades\Auth;
 if (!function_exists('getSettingValue')) { function getSettingValue($key) { try { $setting = Setting::where('key', $key)->first(); return $setting ? $setting->value : null; } catch (\Exception $e) { return null; } } }
 if (!function_exists('getCurrencyCode')) { function getCurrencyCode() { return getSettingValue('currency') ?? 'INR'; } }
-if (!function_exists('formatCurrency')) { function formatCurrency($amount) { return number_format((float)$amount, 2, '.', ','); } }
-if (!function_exists('getLogoUrl')) { function getLogoUrl() { return asset('images/logo.png'); } }
+if (!function_exists('getLogoUrl')) {
+    function getLogoUrl() {
+        try {
+            $setting = Setting::where('key', 'logo')->first();
+            if ($setting) {
+                $media = $setting->media()->latest()->first();
+                if (!empty($media)) {
+                    return $media->getFullUrl();
+                }
+                if (!empty($setting->value)) {
+                    if (filter_var($setting->value, FILTER_VALIDATE_URL)) {
+                        return $setting->value;
+                    }
+                    if (file_exists(public_path($setting->value))) {
+                        return asset($setting->value);
+                    }
+                    if (file_exists(storage_path('app/public/' . $setting->value))) {
+                        return asset('storage/' . $setting->value);
+                    }
+                }
+            }
+        } catch (\Exception $e) {}
+
+        return asset('images/logo.png');
+    }
+}
 if (!function_exists('can')) { function can($permission) { if (!Auth::check()) return false; return Auth::user()->can($permission); } }
 if (!function_exists('getPageSize')) {
     function getPageSize($request = null) {

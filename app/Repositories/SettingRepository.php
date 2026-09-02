@@ -55,12 +55,13 @@ class SettingRepository extends BaseRepository
             DB::beginTransaction();
             if (isset($input['logo']) && !empty($input['logo'])) {
                 /** @var Setting $setting */
-                $setting = Setting::where('key', '=', 'logo')->first();
-                //                $setting->clearMediaCollection(Setting::PATH);
+                $setting = Setting::firstOrCreate(['key' => 'logo'], ['value' => '']);
+                try {
+                    $setting->clearMediaCollection(Setting::PATH);
+                } catch (\Exception $e) {}
                 $media = $setting->addMedia($input['logo'])->toMediaCollection(Setting::PATH, config('app.media_disc'));
-                $setting = $setting->refresh();
                 $setting->update(['value' => $media->getFullUrl()]);
-                $input['logo'] = $setting->getLogoAttribute();
+                $input['logo'] = $media->getFullUrl();
             }
 
             $settingInputArray = Arr::only($input, [
@@ -83,7 +84,7 @@ class SettingRepository extends BaseRepository
                     Setting::where('key', '=', $key)->first()->update(['value' => $value]);
                 }
             }
-            $input['logo'] = Setting::where('key', '=', 'logo')->first()->logo;
+            $input['logo'] = getLogoUrl();
             DB::commit();
 
             return $input;

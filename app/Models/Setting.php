@@ -50,11 +50,23 @@ class Setting extends Model implements HasMedia
     public function getLogoAttribute(): string
     {
         /** @var Media $media */
-        $media = $this->media->last();
+        $media = $this->media()->latest()->first();
         if (! empty($media)) {
             return $media->getFullUrl();
         }
 
-        return asset('images/infyom.png');
+        if (!empty($this->value)) {
+            if (filter_var($this->value, FILTER_VALIDATE_URL)) {
+                return $this->value;
+            }
+            if (file_exists(public_path($this->value))) {
+                return asset($this->value);
+            }
+            if (file_exists(storage_path('app/public/' . $this->value))) {
+                return asset('storage/' . $this->value);
+            }
+        }
+
+        return asset('images/logo.png');
     }
 }

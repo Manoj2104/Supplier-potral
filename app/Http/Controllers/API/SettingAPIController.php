@@ -44,6 +44,9 @@ class SettingAPIController extends AppBaseController
     public function update(Request $request): JsonResponse
     {
         $input = $request->all();
+        if ($request->hasFile('logo')) {
+            $input['logo'] = $request->file('logo');
+        }
         $settings = $this->settingRepository->updateSettings($input);
 
         return $this->sendResponse(new SettingResource(['type' => 'settings', 'attributes' => $settings]),
