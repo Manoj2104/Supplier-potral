@@ -64,29 +64,34 @@ class AuthController extends AppBaseController
         if (empty($email) or empty($password)) {
             return $this->sendError('username and password required', 422);
         }
-        $user = User::whereRaw('lower(email) = ?', [$email])->first();
+        try {
+            $user = User::whereRaw('lower(email) = ?', [$email])->first();
 
-        if (empty($user)) {
-            return $this->sendError(__('messages.error.invalid_username_password'), 422);
+            if (empty($user)) {
+                return $this->sendError(__('messages.error.invalid_username_password'), 422);
+            }
+
+            if (! Hash::check($password, $user->password)) {
+                return $this->sendError(__('messages.error.invalid_username_password'), 422);
+            }
+            $userPermissions = $user->getAllPermissions()->pluck('name')->toArray();
+            unset($user->roles);
+            unset($user->permissions);
+            $token = $user->createToken('token')->plainTextToken;
+            $user->last_name = $user->last_name ?? '';
+
+            return response()->json([
+                'data' => [
+                    'token' => $token,
+                    'user' => $user,
+                    'permissions' => $userPermissions,
+                ],
+                'message' => 'Logged in successfully.',
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Login DB Error: ' . $e->getMessage());
+            return $this->sendError('Database connection error. Please verify cloud database connection settings.', 500);
         }
-
-        if (! Hash::check($password, $user->password)) {
-            return $this->sendError(__('messages.error.invalid_username_password'), 422);
-        }
-        $userPermissions = $user->getAllPermissions()->pluck('name')->toArray();
-        unset($user->roles);
-        unset($user->permissions);
-        $token = $user->createToken('token')->plainTextToken;
-        $user->last_name = $user->last_name ?? '';
-
-        return response()->json([
-            'data' => [
-                'token' => $token,
-                'user' => $user,
-                'permissions' => $userPermissions,
-            ],
-            'message' => 'Logged in successfully.',
-        ]);
     }
 
     public function register(RegisterRequest $request): JsonResponse
