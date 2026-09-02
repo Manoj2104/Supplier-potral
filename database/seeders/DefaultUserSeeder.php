@@ -15,17 +15,33 @@ class DefaultUserSeeder extends Seeder
      */
     public function run(): void
     {
-        $input = [
-            'first_name' => 'admin',
-            'email' => 'admin@infy-pos.com',
-            'email_verified_at' => Carbon::now(),
-            'password' => Hash::make('123456'),
-        ];
-        $user = User::create($input);
-        /** @var Role $adminRole */
         $adminRole = Role::whereName('admin')->first();
-        if ($user) {
-            $user->assignRole($adminRole);
+
+        $users = [
+            [
+                'first_name' => 'Admin',
+                'last_name' => 'Suguna',
+                'email' => 'manoj2104s@gmail.com',
+                'email_verified_at' => Carbon::now(),
+                'password' => Hash::make('8610006544'),
+            ],
+            [
+                'first_name' => 'Admin',
+                'last_name' => 'User',
+                'email' => 'admin@infy-pos.com',
+                'email_verified_at' => Carbon::now(),
+                'password' => Hash::make('123456'),
+            ],
+        ];
+
+        foreach ($users as $userData) {
+            $user = User::updateOrCreate(
+                ['email' => $userData['email']],
+                $userData
+            );
+            if ($adminRole && $user) {
+                $user->assignRole($adminRole);
+            }
         }
     }
 }

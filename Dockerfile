@@ -46,5 +46,5 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-pl
 # Expose port (Render sets $PORT dynamically)
 EXPOSE 80 8080 10000
 
-# Start script
-CMD sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf && apache2-foreground
+# Start script: Auto migrate DB and start Apache
+CMD (php artisan migrate --force || true) && (php artisan db:seed --force || true) && sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf && apache2-foreground
