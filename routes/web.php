@@ -351,64 +351,66 @@ Route::prefix('pda')->name('pda.')->group(function () {
 
 // Custom Warehouse Bins API endpoints for React Admin Page
 Route::get('/api/warehouse-bins', function() {
-    $bins = \App\Models\WarehouseBin::orderBy('bin_code')->get();
-    $binCodes = $bins->pluck('bin_code')->toArray();
-    
-    $binInvs = \App\Models\BinInventory::with(['product:id,name,code,main_product_id'])
-        ->whereIn('bin_code', $binCodes)
-        ->get()
-        ->groupBy('bin_code');
+    return \Illuminate\Support\Facades\Cache::remember('warehouse_bins_list_v2', 30, function() {
+        $bins = \App\Models\WarehouseBin::orderBy('bin_code')->get();
+        $binCodes = $bins->pluck('bin_code')->toArray();
         
-    $mainProdIds = [];
-    $prodIds = [];
-    foreach ($binInvs as $codeInvs) {
-        foreach ($codeInvs as $inv) {
-            if ($inv->product) {
-                $prodIds[] = $inv->product->id;
-                if ($inv->product->main_product_id) {
-                    $mainProdIds[] = $inv->product->main_product_id;
+        $binInvs = \App\Models\BinInventory::with(['product:id,name,code,main_product_id'])
+            ->whereIn('bin_code', $binCodes)
+            ->get()
+            ->groupBy('bin_code');
+            
+        $mainProdIds = [];
+        $prodIds = [];
+        foreach ($binInvs as $codeInvs) {
+            foreach ($codeInvs as $inv) {
+                if ($inv->product) {
+                    $prodIds[] = $inv->product->id;
+                    if ($inv->product->main_product_id) {
+                        $mainProdIds[] = $inv->product->main_product_id;
+                    }
                 }
             }
         }
-    }
-    
-    $mainMedia = !empty($mainProdIds)
-        ? \Illuminate\Support\Facades\DB::table('media')
-            ->where('model_type', 'App\Models\MainProduct')
-            ->whereIn('model_id', array_unique($mainProdIds))
-            ->orderByDesc('id')
-            ->get()
-            ->keyBy('model_id')
-        : collect();
         
-    $prodMedia = !empty($prodIds)
-        ? \Illuminate\Support\Facades\DB::table('media')
-            ->where('model_type', 'App\Models\Product')
-            ->whereIn('model_id', array_unique($prodIds))
-            ->orderByDesc('id')
-            ->get()
-            ->keyBy('model_id')
-        : collect();
+        $mainMedia = !empty($mainProdIds)
+            ? \Illuminate\Support\Facades\DB::table('media')
+                ->where('model_type', 'App\Models\MainProduct')
+                ->whereIn('model_id', array_unique($mainProdIds))
+                ->orderByDesc('id')
+                ->get()
+                ->keyBy('model_id')
+            : collect();
+            
+        $prodMedia = !empty($prodIds)
+            ? \Illuminate\Support\Facades\DB::table('media')
+                ->where('model_type', 'App\Models\Product')
+                ->whereIn('model_id', array_unique($prodIds))
+                ->orderByDesc('id')
+                ->get()
+                ->keyBy('model_id')
+            : collect();
 
-    foreach ($bins as $bin) {
-        $invs = $binInvs->get($bin->bin_code, collect());
-        foreach ($invs as $inv) {
-            $product = $inv->product;
-            if ($product) {
-                $media = ($product->main_product_id && isset($mainMedia[$product->main_product_id]))
-                    ? $mainMedia[$product->main_product_id]
-                    : ($prodMedia->get($product->id));
-                if ($media) {
-                    $coll = $media->collection_name ?: 'main_product';
-                    $product->product_image = "/uploads/{$coll}/{$media->id}/{$media->file_name}";
-                } else {
-                    $product->product_image = "/uploads/main_product/1116/Lays_Classic_Salted__1.jpg";
+        foreach ($bins as $bin) {
+            $invs = $binInvs->get($bin->bin_code, collect());
+            foreach ($invs as $inv) {
+                $product = $inv->product;
+                if ($product) {
+                    $media = ($product->main_product_id && isset($mainMedia[$product->main_product_id]))
+                        ? $mainMedia[$product->main_product_id]
+                        : ($prodMedia->get($product->id));
+                    if ($media) {
+                        $coll = $media->collection_name ?: 'main_product';
+                        $product->product_image = "/uploads/{$coll}/{$media->id}/{$media->file_name}";
+                    } else {
+                        $product->product_image = "/uploads/main_product/1116/Lays_Classic_Salted__1.jpg";
+                    }
                 }
             }
+            $bin->inventories = $invs;
         }
-        $bin->inventories = $invs;
-    }
-    return response()->json($bins);
+        return $bins;
+    });
 });
 
 Route::post('/api/warehouse-bins', function(\Illuminate\Http\Request $request) {
@@ -747,15 +749,17 @@ Route::get('/api/warehouse-bins/putaway-progress/{asnId}', function($asnId) {
 
 // Custom Warehouse Zones API endpoints for React Admin Page
 Route::get('/api/warehouse-zones', function() {
-    if (\App\Models\WarehouseZone::count() === 0) {
-        \App\Models\WarehouseZone::insert([
-            ['name' => 'Zone A', 'category' => 'Fast Moving (FMCG)', 'color' => '#2563EB', 'capacity' => 5000],
-            ['name' => 'Zone B', 'category' => 'Bulk Pallet Storage', 'color' => '#10B981', 'capacity' => 8000],
-            ['name' => 'Zone C', 'category' => 'Cold Storage (-18°C)', 'color' => '#F59E0B', 'capacity' => 3000],
-            ['name' => 'Zone D', 'category' => 'High Value Security', 'color' => '#8B5CF6', 'capacity' => 2000],
-        ]);
-    }
-    return response()->json(\App\Models\WarehouseZone::orderBy('name')->get());
+    return \Illuminate\Support\Facades\Cache::remember('warehouse_zones_list_v2', 60, function() {
+        if (\App\Models\WarehouseZone::count() === 0) {
+            \App\Models\WarehouseZone::insert([
+                ['name' => 'Zone A', 'category' => 'Fast Moving (FMCG)', 'color' => '#2563EB', 'capacity' => 5000],
+                ['name' => 'Zone B', 'category' => 'Bulk Pallet Storage', 'color' => '#10B981', 'capacity' => 8000],
+                ['name' => 'Zone C', 'category' => 'Cold Storage (-18°C)', 'color' => '#F59E0B', 'capacity' => 3000],
+                ['name' => 'Zone D', 'category' => 'High Value Security', 'color' => '#8B5CF6', 'capacity' => 2000],
+            ]);
+        }
+        return \App\Models\WarehouseZone::orderBy('name')->get();
+    });
 });
 
 Route::post('/api/warehouse-zones', function(\Illuminate\Http\Request $request) {
