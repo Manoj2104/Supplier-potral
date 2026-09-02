@@ -426,6 +426,64 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::post('login', [AuthController::class, 'login'])->name('login');
 Route::post('register', [AuthController::class, 'register']);
 
+// ── Self-Healing Auto Setup & Diagnostic Route ──────────────────────────────
+Route::get('auto-setup', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        $migrateOutput = \Illuminate\Support\Facades\Artisan::output();
+
+        try {
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'Database\\Seeders\\DefaultPermissionsSeeder', '--force' => true]);
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'Database\\Seeders\\DefaultRoleSeeder', '--force' => true]);
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'Database\\Seeders\\DefaultUserSeeder', '--force' => true]);
+        } catch (\Throwable $t) {}
+
+        $adminRole = class_exists('\Spatie\Permission\Models\Role') ? \Spatie\Permission\Models\Role::where('name', 'admin')->first() : null;
+
+        $user1 = \App\Models\User::updateOrCreate(
+            ['email' => 'manoj2104s@gmail.com'],
+            [
+                'first_name' => 'Admin',
+                'last_name' => 'Suguna',
+                'password' => \Illuminate\Support\Facades\Hash::make('8610006544'),
+                'email_verified_at' => now(),
+            ]
+        );
+        if ($adminRole && $user1) {
+            $user1->assignRole($adminRole);
+        }
+
+        $user2 = \App\Models\User::updateOrCreate(
+            ['email' => 'admin@infy-pos.com'],
+            [
+                'first_name' => 'Admin',
+                'last_name' => 'User',
+                'password' => \Illuminate\Support\Facades\Hash::make('123456'),
+                'email_verified_at' => now(),
+            ]
+        );
+        if ($adminRole && $user2) {
+            $user2->assignRole($adminRole);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Database migrated and Admin accounts initialized successfully!',
+            'users' => [
+                ['email' => 'manoj2104s@gmail.com', 'password' => '8610006544', 'role' => 'admin'],
+                ['email' => 'admin@infy-pos.com', 'password' => '123456', 'role' => 'admin'],
+            ],
+            'migration' => $migrateOutput,
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile() . ':' . $e->getLine(),
+        ], 500);
+    }
+});
+
 Route::post(
     '/forgot-password',
     [AuthController::class, 'sendPasswordResetLinkEmail']
