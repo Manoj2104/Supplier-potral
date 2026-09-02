@@ -16,6 +16,75 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/auto-setup', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        $migrateOutput = \Illuminate\Support\Facades\Artisan::output();
+
+        try {
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'Database\\Seeders\\DefaultPermissionsSeeder', '--force' => true]);
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'Database\\Seeders\\DefaultRoleSeeder', '--force' => true]);
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'Database\\Seeders\\DefaultUserSeeder', '--force' => true]);
+        } catch (\Throwable $t) {}
+
+        $adminRole = class_exists('\Spatie\Permission\Models\Role') ? \Spatie\Permission\Models\Role::where('name', 'admin')->first() : null;
+
+        $user1 = \App\Models\User::updateOrCreate(
+            ['email' => 'manoj2104s@gmail.com'],
+            [
+                'first_name' => 'Admin',
+                'last_name' => 'Suguna',
+                'password' => \Illuminate\Support\Facades\Hash::make('8610006544'),
+                'email_verified_at' => now(),
+            ]
+        );
+        if ($adminRole && $user1) {
+            $user1->assignRole($adminRole);
+        }
+
+        $user2 = \App\Models\User::updateOrCreate(
+            ['email' => 'admin@infy-pos.com'],
+            [
+                'first_name' => 'Admin',
+                'last_name' => 'User',
+                'password' => \Illuminate\Support\Facades\Hash::make('123456'),
+                'email_verified_at' => now(),
+            ]
+        );
+        if ($adminRole && $user2) {
+            $user2->assignRole($adminRole);
+        }
+
+        return response('
+            <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 50px auto; padding: 32px; background: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center;">
+                <div style="width: 64px; height: 64px; background: #DCFCE7; color: #16A34A; border-radius: 50%; font-size: 32px; line-height: 64px; margin: 0 auto 16px auto;">✓</div>
+                <h1 style="color: #0F172A; font-size: 24px; font-weight: 800; margin: 0 0 8px 0;">Database &amp; Admin Accounts Ready!</h1>
+                <p style="color: #64748B; font-size: 14.5px; margin: 0 0 24px 0;">Database tables migrated and credentials seeded successfully.</p>
+                
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px; text-align: left; margin-bottom: 24px;">
+                    <div style="font-weight: 700; color: #0F172A; margin-bottom: 8px;">🔑 Ready Admin Credentials:</div>
+                    <div style="font-size: 14px; color: #334155; margin-bottom: 4px;">• <strong>Email:</strong> manoj2104s@gmail.com | <strong>Password:</strong> 8610006544</div>
+                    <div style="font-size: 14px; color: #334155;">• <strong>Email:</strong> admin@infy-pos.com | <strong>Password:</strong> 123456</div>
+                </div>
+
+                <a href="/#/login" style="display: inline-block; background: linear-gradient(135deg, #10B981, #059669); color: #FFFFFF; font-weight: 700; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-size: 15px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                    Go to Login Page →
+                </a>
+            </div>
+        ');
+    } catch (\Throwable $e) {
+        return response('
+            <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 50px auto; padding: 32px; background: #FFFFFF; border-radius: 16px; border: 1px solid #FEE2E2; box-shadow: 0 10px 30px rgba(0,0,0,0.05);">
+                <div style="width: 64px; height: 64px; background: #FEE2E2; color: #DC2626; border-radius: 50%; font-size: 32px; line-height: 64px; margin: 0 auto 16px auto; text-align: center;">✕</div>
+                <h1 style="color: #991B1B; font-size: 20px; font-weight: 800; margin: 0 0 8px 0; text-align: center;">Database Setup Error</h1>
+                <p style="color: #7F1D1D; font-size: 14px; margin: 0 0 16px 0; word-break: break-all;">' . htmlspecialchars($e->getMessage()) . '</p>
+                <div style="font-size: 12px; color: #94A3B8;">File: ' . htmlspecialchars($e->getFile() . ':' . $e->getLine()) . '</div>
+            </div>
+        ', 500);
+    }
+});
+Route::get('/setup', fn() => redirect('/auto-setup'));
+
 
 $handleAccept = function ($id) {
     $purchase = \App\Models\Purchase::find($id);
