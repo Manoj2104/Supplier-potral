@@ -1080,75 +1080,77 @@ class WarehousePdaController extends Controller
 
     public function apiPutawayListWeb(Request $request)
     {
-        $asns = SupplierAsn::with([
-            'purchase:id,reference_code,warehouse_id',
-            'purchase.warehouse:id,name',
-            'purchase.purchaseItems:id,purchase_id,product_id,quantity',
-            'purchase.purchaseItems.product:id,name,code',
-            'supplier:id,name'
-        ])
-        ->whereIn('status', ['arrived', 'verified', 'delivered', 'putaway_in_progress', 'putaway_completed', 'completed'])
-        ->orderByDesc('updated_at')
-        ->get();
+        return \Illuminate\Support\Facades\Cache::remember('warehouse_putaway_list_v2', 30, function() {
+            $asns = SupplierAsn::with([
+                'purchase:id,reference_code,warehouse_id',
+                'purchase.warehouse:id,name',
+                'purchase.purchaseItems:id,purchase_id,product_id,quantity',
+                'purchase.purchaseItems.product:id,name,code',
+                'supplier:id,name'
+            ])
+            ->whereIn('status', ['arrived', 'verified', 'delivered', 'putaway_in_progress', 'putaway_completed', 'completed'])
+            ->orderByDesc('updated_at')
+            ->get();
 
-        $productIds = [];
-        foreach ($asns as $a) {
-            if ($a->purchase && $a->purchase->purchaseItems) {
-                foreach ($a->purchase->purchaseItems as $pi) {
-                    $productIds[] = $pi->product_id;
-                }
-            }
-        }
-        $productIds = array_unique(array_filter($productIds));
-
-        $binInvs = !empty($productIds)
-            ? \App\Models\BinInventory::whereIn('product_id', $productIds)->get()->groupBy('product_id')
-            : collect();
-
-        $items = [];
-        foreach ($asns as $asn) {
-            $po = $asn->purchase;
-            $expectedUnits = $po && $po->purchaseItems ? (int)$po->purchaseItems->sum('quantity') : 0;
-            
-            $status = in_array($asn->status, ['putaway_completed', 'completed']) ? 'Putaway Completed' : 'Waiting For Putaway';
-
-            $assignedBins = [];
-            if ($po && $po->purchaseItems) {
-                foreach ($po->purchaseItems as $pi) {
-                    if (isset($binInvs[$pi->product_id])) {
-                        foreach ($binInvs[$pi->product_id] as $bi) {
-                            $assignedBins[] = $bi->bin_code;
-                        }
+            $productIds = [];
+            foreach ($asns as $a) {
+                if ($a->purchase && $a->purchase->purchaseItems) {
+                    foreach ($a->purchase->purchaseItems as $pi) {
+                        $productIds[] = $pi->product_id;
                     }
                 }
             }
-            $assignedBins = array_unique(array_filter($assignedBins));
-            $locationStr = !empty($assignedBins)
-                ? "Main Warehouse > Zone A > Bins > " . implode(', ', $assignedBins)
-                : "Main Warehouse > Zone A > Rack 02 > Shelf B > Bins";
+            $productIds = array_unique(array_filter($productIds));
 
-            $items[] = [
-                'id' => $asn->id,
-                'grn_number' => 'GRN-2026-' . str_pad($asn->id + 120, 5, '0', STR_PAD_LEFT),
-                'po_number' => $po ? ($po->reference_code ?: ('PO-2026-' . str_pad($po->id, 6, '0', STR_PAD_LEFT))) : 'PO-2026-000050',
-                'supplier_name' => $asn->supplier ? $asn->supplier->name : 'Suguna Supplier',
-                'warehouse_name' => $po && $po->warehouse ? $po->warehouse->name : 'Suguna Warehouse',
-                'receiving_date' => $asn->updated_at ? $asn->updated_at->format('Y-m-d') : date('Y-m-d'),
-                'total_accepted' => $expectedUnits,
-                'status' => $status,
-                'location' => $locationStr,
-                'assigned_user' => 'Manoj S (Warehouse Lead)',
-                'items' => $po && $po->purchaseItems ? $po->purchaseItems->map(function($pi) {
-                    return [
-                        'name' => $pi->product ? $pi->product->name : 'Product',
-                        'accepted_qty' => $pi->quantity,
-                        'sku' => $pi->product ? $pi->product->code : 'SKU'
-                    ];
-                })->toArray() : []
-            ];
-        }
+            $binInvs = !empty($productIds)
+                ? \App\Models\BinInventory::whereIn('product_id', $productIds)->get()->groupBy('product_id')
+                : collect();
 
-        return response()->json($items);
+            $items = [];
+            foreach ($asns as $asn) {
+                $po = $asn->purchase;
+                $expectedUnits = $po && $po->purchaseItems ? (int)$po->purchaseItems->sum('quantity') : 0;
+                
+                $status = in_array($asn->status, ['putaway_completed', 'completed']) ? 'Putaway Completed' : 'Waiting For Putaway';
+
+                $assignedBins = [];
+                if ($po && $po->purchaseItems) {
+                    foreach ($po->purchaseItems as $pi) {
+                        if (isset($binInvs[$pi->product_id])) {
+                            foreach ($binInvs[$pi->product_id] as $bi) {
+                                $assignedBins[] = $bi->bin_code;
+                            }
+                        }
+                    }
+                }
+                $assignedBins = array_unique(array_filter($assignedBins));
+                $locationStr = !empty($assignedBins)
+                    ? "Main Warehouse > Zone A > Bins > " . implode(', ', $assignedBins)
+                    : "Main Warehouse > Zone A > Rack 02 > Shelf B > Bins";
+
+                $items[] = [
+                    'id' => $asn->id,
+                    'grn_number' => 'GRN-2026-' . str_pad($asn->id + 120, 5, '0', STR_PAD_LEFT),
+                    'po_number' => $po ? ($po->reference_code ?: ('PO-2026-' . str_pad($po->id, 6, '0', STR_PAD_LEFT))) : 'PO-2026-000050',
+                    'supplier_name' => $asn->supplier ? $asn->supplier->name : 'Suguna Supplier',
+                    'warehouse_name' => $po && $po->warehouse ? $po->warehouse->name : 'Suguna Warehouse',
+                    'receiving_date' => $asn->updated_at ? $asn->updated_at->format('Y-m-d') : date('Y-m-d'),
+                    'total_accepted' => $expectedUnits,
+                    'status' => $status,
+                    'location' => $locationStr,
+                    'assigned_user' => 'Manoj S (Warehouse Lead)',
+                    'items' => $po && $po->purchaseItems ? $po->purchaseItems->map(function($pi) {
+                        return [
+                            'name' => $pi->product ? $pi->product->name : 'Product',
+                            'accepted_qty' => $pi->quantity,
+                            'sku' => $pi->product ? $pi->product->code : 'SKU'
+                        ];
+                    })->toArray() : []
+                ];
+            }
+
+            return response()->json($items);
+        });
     }
 
     public function apiCompletePutaway(Request $request)
