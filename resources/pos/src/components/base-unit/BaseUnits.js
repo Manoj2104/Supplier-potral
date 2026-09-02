@@ -35,7 +35,8 @@ import "../units/ProductUnitsPremium.css";
 import "./ProductBaseUnitsPremium.css";
 import LiveCounter from "../../shared/components/LiveCounter";
 import LiveSparkline from "../../shared/components/LiveSparkline";
-import Modal from 'react-bootstrap/Modal';
+import { subscribePosDataChanged } from "../../shared/posEvents";
+import useSmartLoading from "../../shared/hooks/useSmartLoading";
 import { fetchBaseUnits, addBaseUnit, editBaseUnit, deleteBaseUnit } from '../../store/action/baseUnitsAction';
 
 const BaseUnits = (props) => {
@@ -59,7 +60,6 @@ const BaseUnits = (props) => {
     const [sortBy, setSortBy] = useState('newest');
     const [viewMode, setViewMode] = useState('list');
     const [drawerUnit, setDrawerUnit] = useState(null);
-    const [baseUnitModalTab, setBaseUnitModalTab] = useState('Overview');
     const [selectedRows, setSelectedRows] = useState([]);
     const [pageSize, setPageSize] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
@@ -783,256 +783,94 @@ const BaseUnits = (props) => {
                 )
             )}
 
-            {/* Enterprise Base Unit Details Modal (Matches Adjustments Reference Design) */}
+            {/* 7. Slide-Out Detail Drawer */}
             {drawerUnit && (
-                <Modal
-                    size="lg"
-                    show={!!drawerUnit}
-                    onHide={() => setDrawerUnit(null)}
-                    centered
-                    contentClassName="border-0 shadow-lg"
-                    style={{ borderRadius: "20px" }}
-                >
-                    <div style={{ background: "#FFFFFF", borderRadius: "20px", overflow: "hidden" }}>
-                        
-                        {/* Header */}
-                        <div style={{ background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)", padding: "20px 24px", color: "#FFFFFF" }} className="d-flex align-items-center justify-content-between">
+                <>
+                    <div className="brand-drawer-backdrop" onClick={() => setDrawerUnit(null)} />
+                    <div className="brand-drawer">
+                        <div className="brand-drawer-header">
                             <div>
-                                <div className="d-flex align-items-center gap-2">
-                                    <span style={{ background: "#16A34A", color: "#FFF", fontSize: "11px", fontWeight: "800", padding: "3px 8px", borderRadius: "6px" }}>
-                                        ENTERPRISE WMS
-                                    </span>
-                                    <h4 style={{ fontSize: "18px", fontWeight: "800", color: "#FFF", margin: 0, textTransform: 'uppercase' }}>
-                                        BASE-UNIT-{String(drawerUnit.id || '01').padStart(3, '0')} • {drawerUnit.name}
-                                    </h4>
-                                </div>
-                                <p style={{ fontSize: "12px", color: "#94A3B8", margin: "4px 0 0 0" }}>
-                                    Master Base Unit Record &bull; {drawerUnit.name} &bull; Symbol: {drawerUnit.meta?.symbol || 'STD'} &bull; Active
+                                <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, textTransform: 'capitalize' }}>
+                                    {drawerUnit.name}
+                                </h3>
+                                <p style={{ fontSize: '12px', color: '#64748B', margin: '4px 0 0 0' }}>
+                                    Master Base Unit Details
                                 </p>
                             </div>
-                            <button type="button" className="btn-close btn-close-white" onClick={() => setDrawerUnit(null)}></button>
-                        </div>
-
-                        {/* Tabs Bar */}
-                        <div style={{ borderBottom: "1px solid #E2E8F0", padding: "0 24px", background: "#F8FAFC" }} className="d-flex align-items-center gap-3">
-                            {["Overview", "Product Information", "Warehouse & Conversion", "Approval & Audit Log"].map((tab) => (
-                                <button
-                                    key={tab}
-                                    type="button"
-                                    onClick={() => setBaseUnitModalTab(tab)}
-                                    style={{
-                                        padding: "12px 4px",
-                                        border: "none",
-                                        background: "transparent",
-                                        borderBottom: baseUnitModalTab === tab ? "3px solid #16A34A" : "3px solid transparent",
-                                        color: baseUnitModalTab === tab ? "#16A34A" : "#64748B",
-                                        fontWeight: baseUnitModalTab === tab ? "800" : "600",
-                                        fontSize: "13px",
-                                        cursor: "pointer"
-                                    }}
-                                >
-                                    {tab}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Body */}
-                        <div style={{ padding: "24px", maxHeight: "70vh", overflowY: "auto" }}>
-                            
-                            {/* Tab 1: Overview */}
-                            {baseUnitModalTab === "Overview" && (
-                                <div>
-                                    <div className="row g-3 mb-4">
-                                        <div className="col-6 col-md-3">
-                                            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "12px" }}>
-                                                <div style={{ fontSize: "11px", color: "#64748B" }}>Base Unit Name</div>
-                                                <div style={{ fontSize: "13.5px", fontWeight: "800", color: "#0F172A", marginTop: "2px", textTransform: "capitalize" }}>
-                                                    {drawerUnit.name}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="col-6 col-md-3">
-                                            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "12px" }}>
-                                                <div style={{ fontSize: "11px", color: "#64748B" }}>Measurement Type</div>
-                                                <div style={{ fontSize: "13.5px", fontWeight: "800", color: "#2563EB", marginTop: "2px" }}>
-                                                    {drawerUnit.meta?.category || 'Standard'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="col-6 col-md-3">
-                                            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "12px" }}>
-                                                <div style={{ fontSize: "11px", color: "#64748B" }}>Linked Sub-Units</div>
-                                                <div style={{ fontSize: "13.5px", fontWeight: "800", color: "#0F172A", marginTop: "2px" }}>
-                                                    {drawerUnit.meta?.linkedCount || 0} Sub-Units
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="col-6 col-md-3">
-                                            <div style={{ background: "#F0FDF4", border: "1px solid #DCFCE7", borderRadius: "12px", padding: "12px" }}>
-                                                <div style={{ fontSize: "11px", color: "#15803D" }}>Status</div>
-                                                <div style={{ fontSize: "13.5px", fontWeight: "800", color: "#15803D", marginTop: "2px" }}>
-                                                    ✓ Completed &amp; Active
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <h5 style={{ fontSize: "14px", fontWeight: "800", color: "#0F172A", marginBottom: "12px" }}>
-                                        Base Unit Hierarchy &amp; Usage Summary
-                                    </h5>
-                                    <div className="table-responsive border rounded" style={{ borderRadius: "12px", overflow: "hidden" }}>
-                                        <table className="table align-middle mb-0" style={{ fontSize: "12.5px" }}>
-                                            <thead className="bg-light">
-                                                <tr style={{ fontSize: "11px", color: "#64748B", fontWeight: "800" }}>
-                                                    <th style={{ padding: "10px 12px" }}>PROPERTY</th>
-                                                    <th style={{ padding: "10px 12px" }}>CODE / REFERENCE</th>
-                                                    <th style={{ padding: "10px 12px" }}>PRODUCTS COUNT</th>
-                                                    <th style={{ padding: "10px 12px" }}>CONVERSION METHOD</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td style={{ padding: "10px 12px", fontWeight: "700", color: "#0F172A" }}>
-                                                        <div className="d-flex align-items-center gap-2">
-                                                            <div style={{ width: "26px", height: "26px", borderRadius: "6px", background: drawerUnit.meta?.iconBg || "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px" }}>
-                                                                <FontAwesomeIcon icon={drawerUnit.meta?.icon || faBox} style={{ color: drawerUnit.meta?.color || "#15803D" }} />
-                                                            </div>
-                                                            <span>Root Base Unit</span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: "10px 12px", color: "#64748B", fontFamily: "monospace" }}>
-                                                        BU-{drawerUnit.name?.toUpperCase()}
-                                                    </td>
-                                                    <td style={{ padding: "10px 12px", fontWeight: "800", color: "#0F172A" }}>
-                                                        {drawerUnit.meta?.used || 0} Products
-                                                    </td>
-                                                    <td style={{ padding: "10px 12px" }}>
-                                                        <span className="badge" style={{ background: "#DCFCE7", color: "#15803D", fontWeight: "800" }}>
-                                                            Root Multiplier (1.00x)
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td style={{ padding: "10px 12px", fontWeight: "700", color: "#0F172A" }}>
-                                                        <div className="d-flex align-items-center gap-2">
-                                                            <div style={{ width: "26px", height: "26px", borderRadius: "6px", background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px" }}>
-                                                                <FontAwesomeIcon icon={faLink} style={{ color: "#2563EB" }} />
-                                                            </div>
-                                                            <span>Dependent Sub-Units</span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: "10px 12px", color: "#64748B", fontFamily: "monospace" }}>
-                                                        LINK-{drawerUnit.meta?.linkedCount || 0}
-                                                    </td>
-                                                    <td style={{ padding: "10px 12px", fontWeight: "800", color: "#0F172A" }}>
-                                                        {drawerUnit.meta?.linkedCount || 0} Child Units
-                                                    </td>
-                                                    <td style={{ padding: "10px 12px" }}>
-                                                        <span className="badge" style={{ background: "#EFF6FF", color: "#2563EB", fontWeight: "800" }}>
-                                                            Multi-Tier Conversion
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Tab 2: Product Information */}
-                            {baseUnitModalTab === "Product Information" && (
-                                <div>
-                                    <div className="p-3 border rounded mb-3" style={{ background: "#F8FAFC", borderRadius: "12px" }}>
-                                        <div className="d-flex align-items-center gap-3">
-                                            <div style={{ width: "48px", height: "48px", borderRadius: "10px", background: drawerUnit.meta?.iconBg || "#DCFCE7", color: drawerUnit.meta?.color || "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px" }}>
-                                                <FontAwesomeIcon icon={drawerUnit.meta?.icon || faBox} />
-                                            </div>
-                                            <div>
-                                                <h5 style={{ fontSize: "15px", fontWeight: "800", margin: 0, color: "#0F172A", textTransform: "capitalize" }}>
-                                                    {drawerUnit.name} Base Unit
-                                                </h5>
-                                                <span style={{ fontSize: "12px", color: "#64748B" }}>
-                                                    Category: {drawerUnit.meta?.category} &bull; Symbol: {drawerUnit.meta?.symbol} &bull; Decimal Precision: 0.01
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="row g-3" style={{ fontSize: "12.5px" }}>
-                                        <div className="col-4">
-                                            <span style={{ color: "#64748B" }}>Products Count:</span> <strong style={{ color: "#0F172A" }}>{drawerUnit.meta?.used || 0} Products</strong>
-                                        </div>
-                                        <div className="col-4">
-                                            <span style={{ color: "#64748B" }}>Sub-Units Count:</span> <strong style={{ color: "#16A34A" }}>{drawerUnit.meta?.linkedCount || 0} Units</strong>
-                                        </div>
-                                        <div className="col-4">
-                                            <span style={{ color: "#64748B" }}>Inventory Sync:</span> <strong style={{ color: "#0F172A" }}>Real-Time 0ms</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Tab 3: Warehouse & Conversion */}
-                            {baseUnitModalTab === "Warehouse & Conversion" && (
-                                <div style={{ fontSize: "13px" }}>
-                                    <div className="d-flex flex-column gap-2">
-                                        <div className="d-flex justify-content-between py-2 border-bottom">
-                                            <span style={{ color: "#64748B" }}>Warehouse Facility</span>
-                                            <strong style={{ color: "#0F172A" }}>Main Warehouse &amp; Central Hub</strong>
-                                        </div>
-                                        <div className="d-flex justify-content-between py-2 border-bottom">
-                                            <span style={{ color: "#64748B" }}>Conversion Multiplier</span>
-                                            <strong style={{ color: "#2563EB", fontFamily: "monospace" }}>1.000000 (Base)</strong>
-                                        </div>
-                                        <div className="d-flex justify-content-between py-2 border-bottom">
-                                            <span style={{ color: "#64748B" }}>Stock Valuation Formula</span>
-                                            <strong style={{ color: "#0F172A" }}>Quantity * Base Cost Rate</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Tab 4: Approval & Audit Log */}
-                            {baseUnitModalTab === "Approval & Audit Log" && (
-                                <div>
-                                    <div className="d-flex flex-column gap-3" style={{ fontSize: "12.5px" }}>
-                                        <div className="d-flex align-items-start gap-3">
-                                            <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#DCFCE7", color: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontWeight: "800" }}>
-                                                ✓
-                                            </div>
-                                            <div>
-                                                <div style={{ fontWeight: "800", color: "#0F172A" }}>Base Unit Verified &amp; System Standard</div>
-                                                <div style={{ fontSize: "11px", color: "#64748B" }}>
-                                                    {drawerUnit.createdDate || 'Today'} &bull; Processed by Manoj S (Admin) &bull; Enterprise WMS Node 01
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                        </div>
-
-                        {/* Footer */}
-                        <div style={{ padding: "16px 24px", background: "#F8FAFC", borderTop: "1px solid #E2E8F0" }} className="d-flex justify-content-between align-items-center">
                             <button
                                 type="button"
-                                className="btn btn-success fw-bold px-4"
-                                style={{ borderRadius: "10px", background: "linear-gradient(135deg, #16A34A, #15803D)", border: "none" }}
-                                onClick={() => {
-                                    const target = drawerUnit;
-                                    setDrawerUnit(null);
-                                    handleClose(target);
-                                }}
+                                className="brand-drawer-close"
+                                onClick={() => setDrawerUnit(null)}
                             >
-                                <FontAwesomeIcon icon={faEdit} className="me-2" /> Edit Base Unit
-                            </button>
-                            <button type="button" className="btn btn-secondary fw-bold px-4" onClick={() => setDrawerUnit(null)} style={{ borderRadius: "10px" }}>
-                                Close
+                                <FontAwesomeIcon icon={faXmark} />
                             </button>
                         </div>
 
+                        <div className="brand-drawer-body">
+                            <div style={{ textAlign: 'center', padding: '24px 0', borderBottom: '1px solid #EEF2F7' }}>
+                                <div
+                                    style={{
+                                        width: '72px',
+                                        height: '72px',
+                                        borderRadius: '24px',
+                                        background: drawerUnit.meta?.iconBg || '#F1F5F9',
+                                        color: drawerUnit.meta?.color || '#15803D',
+                                        fontSize: '32px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 16px auto',
+                                        boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
+                                    }}
+                                >
+                                    <FontAwesomeIcon icon={drawerUnit.meta?.icon || faBox} />
+                                </div>
+                                <h2 style={{ fontSize: '20px', fontWeight: '800', margin: '0 0 6px 0', textTransform: 'capitalize' }}>
+                                    {drawerUnit.name}
+                                </h2>
+                                <div className="d-flex align-items-center justify-content-center gap-2">
+                                    <span className="unit-short-badge">{drawerUnit.meta?.symbol}</span>
+                                    <span className={`cat-badge ${drawerUnit.meta?.category.toLowerCase()}`}>
+                                        {drawerUnit.meta?.category}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style={{ padding: '20px 0' }}>
+                                <div style={{ fontSize: '12px', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: '14px' }}>
+                                    Base Unit Statistics
+                                </div>
+                                <div className="brand-drawer-stat-row">
+                                    <span>Products Using</span>
+                                    <strong>{drawerUnit.meta?.used || 0} Products</strong>
+                                </div>
+                                <div className="brand-drawer-stat-row">
+                                    <span>Linked Sub-Units</span>
+                                    <strong>{drawerUnit.meta?.linkedCount || 0} Units</strong>
+                                </div>
+                                <div className="brand-drawer-stat-row">
+                                    <span>Status</span>
+                                    <span className="var-status-badge active">● Active</span>
+                                </div>
+                            </div>
+
+                            <div style={{ marginTop: '24px', display: 'flex', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    className="brand-btn-pill brand-btn-primary"
+                                    style={{ flex: 1, justifyContent: 'center' }}
+                                    onClick={() => {
+                                        const target = drawerUnit;
+                                        setDrawerUnit(null);
+                                        handleClose(target);
+                                    }}
+                                >
+                                    <FontAwesomeIcon icon={faEdit} /> Edit Base Unit
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </Modal>
+                </>
             )}
 
             {/* Modals */}

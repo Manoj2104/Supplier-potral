@@ -166,13 +166,16 @@ class PurchaseAPIController extends AppBaseController
 
     public function purchaseInfo(Purchase $purchase): JsonResponse
     {
-        $purchase = $purchase->load(['purchaseItems.product', 'warehouse', 'supplier']);
-        $keyName = [
-            'email', 'company_name', 'phone', 'address',
-        ];
-        $purchase['company_info'] = Setting::whereIn('key', $keyName)->pluck('value', 'key')->toArray();
+        $cached = \Illuminate\Support\Facades\Cache::remember('purchase_info_' . $purchase->id, 30, function () use ($purchase) {
+            $purchase = $purchase->load(['purchaseItems.product', 'warehouse', 'supplier']);
+            $keyName = [
+                'email', 'company_name', 'phone', 'address',
+            ];
+            $purchase['company_info'] = Setting::whereIn('key', $keyName)->pluck('value', 'key')->toArray();
+            return $purchase;
+        });
 
-        return $this->sendResponse($purchase, 'Purchase information retrieved successfully');
+        return $this->sendResponse($cached, 'Purchase information retrieved successfully');
     }
 
     public function getPurchaseProductReport(Request $request): PurchaseCollection

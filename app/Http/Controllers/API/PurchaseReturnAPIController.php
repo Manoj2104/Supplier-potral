@@ -125,13 +125,16 @@ class PurchaseReturnAPIController extends AppBaseController
 
     public function purchaseReturnInfo(PurchaseReturn $purchaseReturn): JsonResponse
     {
-        $purchaseReturn = $purchaseReturn->load(['purchaseReturnItems.product', 'warehouse', 'supplier']);
-        $keyName = [
-            'email', 'company_name', 'phone', 'address',
-        ];
-        $purchaseReturn['company_info'] = Setting::whereIn('key', $keyName)->pluck('value', 'key')->toArray();
+        $cached = \Illuminate\Support\Facades\Cache::remember('purchase_return_info_' . $purchaseReturn->id, 30, function () use ($purchaseReturn) {
+            $purchaseReturn = $purchaseReturn->load(['purchaseReturnItems.product', 'warehouse', 'supplier']);
+            $keyName = [
+                'email', 'company_name', 'phone', 'address',
+            ];
+            $purchaseReturn['company_info'] = Setting::whereIn('key', $keyName)->pluck('value', 'key')->toArray();
+            return $purchaseReturn;
+        });
 
-        return $this->sendResponse($purchaseReturn, 'Purchase Return information retrieved successfully');
+        return $this->sendResponse($cached, 'Purchase Return information retrieved successfully');
     }
 
     /**
