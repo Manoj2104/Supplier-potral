@@ -96,13 +96,16 @@ class QuotationAPIController extends AppBaseController
 
     public function quotationInfo(Quotation $quotation): JsonResponse
     {
-        $quotation = $quotation->load('quotationItems.product', 'warehouse', 'customer');
-        $keyName = [
-            'email', 'company_name', 'phone', 'address',
-        ];
-        $quotation['company_info'] = Setting::whereIn('key', $keyName)->pluck('value', 'key')->toArray();
+        $cachedData = \Illuminate\Support\Facades\Cache::remember('quotation_info_' . $quotation->id, 30, function() use ($quotation) {
+            $quotation = $quotation->load('quotationItems.product', 'warehouse', 'customer');
+            $keyName = [
+                'email', 'company_name', 'phone', 'address',
+            ];
+            $quotation['company_info'] = Setting::whereIn('key', $keyName)->pluck('value', 'key')->toArray();
+            return $quotation;
+        });
 
-        return $this->sendResponse($quotation, 'Quotation information retrieved successfully');
+        return $this->sendResponse($cachedData, 'Quotation information retrieved successfully');
     }
 
     public function edit(Quotation $quotation): QuotationResource
