@@ -78,30 +78,23 @@ return [
 
         'pgsql' => (function () {
             $url = env('DATABASE_URL');
-            $host = env('DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co');
-            $port = env('DB_PORT', '5432');
-            $username = env('DB_USERNAME', 'postgres');
-            $password = env('DB_PASSWORD', 'Manojnandhini@2104');
-            $database = env('DB_DATABASE', 'postgres');
+            $parsed = $url ? parse_url($url) : [];
 
-            // Automatically resolve Supabase pooler overrides to Direct Connection
-            if (str_contains((string)$url, 'pooler.supabase.com')) {
-                $url = null;
-            }
-            if (str_contains((string)$host, 'pooler.supabase.com')) {
-                $host = 'db.ejbygpiozuaomomshazl.supabase.co';
-                $port = '5432';
-                $username = 'postgres';
-            }
-            if (str_starts_with((string)$username, 'postgres.')) {
-                $username = 'postgres';
+            $host = $parsed['host'] ?? env('DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co');
+            $port = $parsed['port'] ?? env('DB_PORT', '5432');
+            $database = isset($parsed['path']) ? ltrim($parsed['path'], '/') : env('DB_DATABASE', 'postgres');
+            $username = $parsed['user'] ?? env('DB_USERNAME', 'postgres');
+            $password = $parsed['pass'] ?? env('DB_PASSWORD', 'Manojnandhini@2104');
+
+            if (isset($parsed['host']) && !empty($parsed['host'])) {
+                $host = $parsed['host'];
             }
 
             return [
                 'driver' => 'pgsql',
                 'url' => $url,
                 'host' => $host,
-                'port' => $port,
+                'port' => (string) $port,
                 'database' => $database,
                 'username' => $username,
                 'password' => $password,
