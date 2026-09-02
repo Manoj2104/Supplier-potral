@@ -830,169 +830,171 @@ Route::get('/api/warehouse-putaway/list', function() {
 
 // Master Enterprise Inventory API Endpoint
 Route::get('/api/inventory/master-stock', function() {
-    try {
-        $products = \App\Models\Product::with(['productCategory', 'brand'])->get();
-        $warehouse = \App\Models\Warehouse::first();
-        $whName = $warehouse ? $warehouse->name : 'Main Warehouse';
+    return \Illuminate\Support\Facades\Cache::remember('master_inventory_stock_v2', 30, function() {
+        try {
+            $products = \App\Models\Product::with(['productCategory', 'brand'])->get();
+            $warehouse = \App\Models\Warehouse::first();
+            $whName = $warehouse ? $warehouse->name : 'Main Warehouse';
 
-        // Build bin map: product_id => [{bin_code, quantity}] (Only Active Bins)
-        $binInventories = \Illuminate\Support\Facades\DB::table('bin_inventories')
-            ->join('warehouse_bins', 'bin_inventories.bin_code', '=', 'warehouse_bins.bin_code')
-            ->where('warehouse_bins.is_active', 1)
-            ->select('bin_inventories.*')
-            ->get();
-        $binMap = [];
-        foreach ($binInventories as $bi) {
-            $binMap[$bi->product_id][] = [
-                'bin_code' => $bi->bin_code,
-                'quantity' => $bi->quantity
-            ];
-        }
-
-        // Build manage_stocks map: product_id => total qty
-        $stockRows = \Illuminate\Support\Facades\DB::table('manage_stocks')->get();
-        $stockMap = [];
-        foreach ($stockRows as $s) {
-            $stockMap[$s->product_id] = ($stockMap[$s->product_id] ?? 0) + $s->quantity;
-        }
-
-        $items = [];
-        foreach ($products as $p) {
-            // Get product image
-            $imageUrl = null;
-            $media = \Illuminate\Support\Facades\DB::table('media')
-                ->where(function($q) use ($p) {
-                    $q->where(function($q2) use ($p) {
-                        $q2->where('model_type', 'App\Models\MainProduct')
-                           ->where('model_id', $p->main_product_id ?: $p->id);
-                    })->orWhere(function($q3) use ($p) {
-                        $q3->where('model_type', 'App\Models\Product')
-                           ->where('model_id', $p->id);
-                    });
-                })
-                ->first();
-
-            if ($media) {
-                $coll = $media->collection_name ?: 'main_product';
-                $imageUrl = "/uploads/{$coll}/{$media->id}/{$media->file_name}";
-            } else {
-                $imageUrl = "/uploads/main_product/1116/Lays_Classic_Salted__1.jpg";
+            // Build bin map: product_id => [{bin_code, quantity}] (Only Active Bins)
+            $binInventories = \Illuminate\Support\Facades\DB::table('bin_inventories')
+                ->join('warehouse_bins', 'bin_inventories.bin_code', '=', 'warehouse_bins.bin_code')
+                ->where('warehouse_bins.is_active', 1)
+                ->select('bin_inventories.*')
+                ->get();
+            $binMap = [];
+            foreach ($binInventories as $bi) {
+                $binMap[$bi->product_id][] = [
+                    'bin_code' => $bi->bin_code,
+                    'quantity' => $bi->quantity
+                ];
             }
 
-            // Calculate Available Qty (Uses bin_inventories if present, OR manage_stocks if bin_inventories is empty)
-            $allocatedBins  = $binMap[$p->id] ?? [];
-            $binQty         = !empty($allocatedBins) ? array_sum(array_column($allocatedBins, 'quantity')) : 0;
-            $manageQty      = (float) ($stockMap[$p->id] ?? 0);
-            $availableQty   = max($binQty, $manageQty);
-            $binStr         = !empty($allocatedBins) ? implode(', ', array_column($allocatedBins, 'bin_code')) : ($availableQty > 0 ? 'A-01-01' : '—');
-
-            // Sync manage_stocks and bin_inventories so both stay in 100% lockstep
-            \Illuminate\Support\Facades\DB::table('manage_stocks')
-                ->updateOrInsert(
-                    ['product_id' => $p->id, 'warehouse_id' => $warehouse ? $warehouse->id : 1],
-                    ['quantity' => $availableQty]
-                );
-
-            if ($availableQty > 0 && empty($allocatedBins)) {
-                try {
-                    \Illuminate\Support\Facades\DB::table('bin_inventories')->updateOrInsert(
-                        ['product_id' => $p->id, 'bin_code' => 'A-01-01'],
-                        ['quantity' => $availableQty, 'updated_at' => now(), 'created_at' => now()]
-                    );
-                } catch (\Exception $ex) {}
+            // Build manage_stocks map: product_id => total qty
+            $stockRows = \Illuminate\Support\Facades\DB::table('manage_stocks')->get();
+            $stockMap = [];
+            foreach ($stockRows as $s) {
+                $stockMap[$s->product_id] = ($stockMap[$s->product_id] ?? 0) + $s->quantity;
             }
 
-            // Calculate Receiving Stock (Pending POs / ASNs not yet put away)
-            $receivingQty = (int) \Illuminate\Support\Facades\DB::table('purchase_items')
-                ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
-                ->leftJoin('supplier_asns', 'purchases.id', '=', 'supplier_asns.purchase_id')
-                ->where('purchase_items.product_id', $p->id)
-                ->where(function($q) {
-                    $q->whereNull('supplier_asns.status')
-                      ->orWhere('supplier_asns.status', '!=', 'putaway_completed');
-                })
-                ->sum('purchase_items.quantity');
+            $items = [];
+            foreach ($products as $p) {
+                // Get product image
+                $imageUrl = null;
+                $media = \Illuminate\Support\Facades\DB::table('media')
+                    ->where(function($q) use ($p) {
+                        $q->where(function($q2) use ($p) {
+                            $q2->where('model_type', 'App\Models\MainProduct')
+                               ->where('model_id', $p->main_product_id ?: $p->id);
+                        })->orWhere(function($q3) use ($p) {
+                            $q3->where('model_type', 'App\Models\Product')
+                               ->where('model_id', $p->id);
+                        });
+                    })
+                    ->first();
 
-            $reservedQty = 0;
-            $totalQty    = $availableQty + $reservedQty;
-
-            $cost     = (float) ($p->product_cost ?: ($p->product_price ? $p->product_price * 0.85 : 100));
-            $price    = (float) ($p->product_price ?: $cost * 1.25);
-            $mrp      = round($price * 1.15, 2);
-            $gst      = (int) ($p->order_tax ?: 18);
-            $invValue = round($availableQty * $price, 2);
-
-            // Status
-            $status = 'Available';
-            if ($availableQty <= 0) {
-                $status = 'Out of Stock';
-            } elseif ($availableQty < ($p->stock_alert ?: 10)) {
-                $status = 'Low Stock';
-            }
-
-            // Zone from bin code (e.g. A-01-02 → A-01)
-            $zone = 'A-01';
-            if (!empty($allocatedBins)) {
-                $firstBin = $allocatedBins[0]['bin_code'];
-                $parts = explode('-', $firstBin);
-                if (count($parts) >= 2) {
-                    $zone = $parts[0] . '-' . $parts[1];
+                if ($media) {
+                    $coll = $media->collection_name ?: 'main_product';
+                    $imageUrl = "/uploads/{$coll}/{$media->id}/{$media->file_name}";
+                } else {
+                    $imageUrl = "/uploads/main_product/1116/Lays_Classic_Salted__1.jpg";
                 }
+
+                // Calculate Available Qty (Uses bin_inventories if present, OR manage_stocks if bin_inventories is empty)
+                $allocatedBins  = $binMap[$p->id] ?? [];
+                $binQty         = !empty($allocatedBins) ? array_sum(array_column($allocatedBins, 'quantity')) : 0;
+                $manageQty      = (float) ($stockMap[$p->id] ?? 0);
+                $availableQty   = max($binQty, $manageQty);
+                $binStr         = !empty($allocatedBins) ? implode(', ', array_column($allocatedBins, 'bin_code')) : ($availableQty > 0 ? 'A-01-01' : '—');
+
+                // Sync manage_stocks and bin_inventories so both stay in 100% lockstep
+                \Illuminate\Support\Facades\DB::table('manage_stocks')
+                    ->updateOrInsert(
+                        ['product_id' => $p->id, 'warehouse_id' => $warehouse ? $warehouse->id : 1],
+                        ['quantity' => $availableQty]
+                    );
+
+                if ($availableQty > 0 && empty($allocatedBins)) {
+                    try {
+                        \Illuminate\Support\Facades\DB::table('bin_inventories')->updateOrInsert(
+                            ['product_id' => $p->id, 'bin_code' => 'A-01-01'],
+                            ['quantity' => $availableQty, 'updated_at' => now(), 'created_at' => now()]
+                        );
+                    } catch (\Exception $ex) {}
+                }
+
+                // Calculate Receiving Stock (Pending POs / ASNs not yet put away)
+                $receivingQty = (int) \Illuminate\Support\Facades\DB::table('purchase_items')
+                    ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
+                    ->leftJoin('supplier_asns', 'purchases.id', '=', 'supplier_asns.purchase_id')
+                    ->where('purchase_items.product_id', $p->id)
+                    ->where(function($q) {
+                        $q->whereNull('supplier_asns.status')
+                          ->orWhere('supplier_asns.status', '!=', 'putaway_completed');
+                    })
+                    ->sum('purchase_items.quantity');
+
+                $reservedQty = 0;
+                $totalQty    = $availableQty + $reservedQty;
+
+                $cost     = (float) ($p->product_cost ?: ($p->product_price ? $p->product_price * 0.85 : 100));
+                $price    = (float) ($p->product_price ?: $cost * 1.25);
+                $mrp      = round($price * 1.15, 2);
+                $gst      = (int) ($p->order_tax ?: 18);
+                $invValue = round($availableQty * $price, 2);
+
+                // Status
+                $status = 'Available';
+                if ($availableQty <= 0) {
+                    $status = 'Out of Stock';
+                } elseif ($availableQty < ($p->stock_alert ?: 10)) {
+                    $status = 'Low Stock';
+                }
+
+                // Zone from bin code (e.g. A-01-02 → A-01)
+                $zone = 'A-01';
+                if (!empty($allocatedBins)) {
+                    $firstBin = $allocatedBins[0]['bin_code'];
+                    $parts = explode('-', $firstBin);
+                    if (count($parts) >= 2) {
+                        $zone = $parts[0] . '-' . $parts[1];
+                    }
+                }
+
+                $items[] = [
+                    'id'             => $p->id,
+                    'name'           => $p->name,
+                    'sku'            => $p->product_code ?: $p->code ?: 'SKU-' . $p->id,
+                    'barcode'        => $p->code ?: '—',
+                    'hsn_code'       => '8528',
+                    'category_name'  => $p->productCategory ? $p->productCategory->name : 'General',
+                    'brand_name'     => $p->brand ? $p->brand->name : '—',
+                    'unit_name'      => $p->unit ? $p->unit->name : 'PCS',
+                    'supplier_name'  => $p->supplier ? $p->supplier->name : 'General Supplier',
+                    'supplier_code'  => $p->supplier ? 'SUP-' . str_pad($p->supplier->id, 4, '0', STR_PAD_LEFT) : 'SUP-0001',
+                    'warehouse_name' => $whName,
+                    'zone'           => $zone,
+                    'bin_location'   => $binStr ?: '—',
+                    'available_qty'  => $availableQty,
+                    'total_qty'      => $totalQty,
+                    'reserved_qty'   => $reservedQty,
+                    'receiving_qty'  => $receivingQty,
+                    'purchase_price' => $cost,
+                    'selling_price'  => $price,
+                    'mrp'            => $mrp,
+                    'gst_pct'        => $gst,
+                    'tax_amount'     => round(($price * $gst) / 100, 2),
+                    'inventory_value'=> $invValue,
+                    'status'         => $status,
+                    'image_url'      => $imageUrl,
+                    'created_at'     => $p->created_at ? $p->created_at->format('Y-m-d') : date('Y-m-d'),
+                ];
             }
 
-            $items[] = [
-                'id'             => $p->id,
-                'name'           => $p->name,
-                'sku'            => $p->product_code ?: $p->code ?: 'SKU-' . $p->id,
-                'barcode'        => $p->code ?: '—',
-                'hsn_code'       => '8528',
-                'category_name'  => $p->productCategory ? $p->productCategory->name : 'General',
-                'brand_name'     => $p->brand ? $p->brand->name : '—',
-                'unit_name'      => $p->unit ? $p->unit->name : 'PCS',
-                'supplier_name'  => $p->supplier ? $p->supplier->name : 'General Supplier',
-                'supplier_code'  => $p->supplier ? 'SUP-' . str_pad($p->supplier->id, 4, '0', STR_PAD_LEFT) : 'SUP-0001',
-                'warehouse_name' => $whName,
-                'zone'           => $zone,
-                'bin_location'   => $binStr ?: '—',
-                'available_qty'  => $availableQty,
-                'total_qty'      => $totalQty,
-                'reserved_qty'   => $reservedQty,
-                'receiving_qty'  => $receivingQty,
-                'purchase_price' => $cost,
-                'selling_price'  => $price,
-                'mrp'            => $mrp,
-                'gst_pct'        => $gst,
-                'tax_amount'     => round(($price * $gst) / 100, 2),
-                'inventory_value'=> $invValue,
-                'status'         => $status,
-                'image_url'      => $imageUrl,
-                'created_at'     => $p->created_at ? $p->created_at->format('Y-m-d') : date('Y-m-d'),
-            ];
+            return response()->json([
+                'success' => true,
+                'data'    => $items,
+                'summary' => [
+                    'total_products'    => count($items),
+                    'available_qty'     => array_sum(array_column($items, 'available_qty')),
+                    'inventory_value'   => array_sum(array_column($items, 'inventory_value')),
+                    'low_stock_count'   => count(array_filter($items, fn($i) => $i['status'] === 'Low Stock')),
+                    'out_of_stock_count'=> count(array_filter($items, fn($i) => $i['status'] === 'Out of Stock')),
+                    'reserved_stock'    => array_sum(array_column($items, 'reserved_qty')),
+                    'expired_count'     => 0,
+                    'receiving_stock'   => array_sum(array_column($items, 'receiving_qty')),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error'   => $e->getMessage(),
+                'data'    => [],
+                'summary' => []
+            ], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'data'    => $items,
-            'summary' => [
-                'total_products'    => count($items),
-                'available_qty'     => array_sum(array_column($items, 'available_qty')),
-                'inventory_value'   => array_sum(array_column($items, 'inventory_value')),
-                'low_stock_count'   => count(array_filter($items, fn($i) => $i['status'] === 'Low Stock')),
-                'out_of_stock_count'=> count(array_filter($items, fn($i) => $i['status'] === 'Out of Stock')),
-                'reserved_stock'    => array_sum(array_column($items, 'reserved_qty')),
-                'expired_count'     => 0,
-                'receiving_stock'   => array_sum(array_column($items, 'receiving_qty')),
-            ]
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'error'   => $e->getMessage(),
-            'data'    => [],
-            'summary' => []
-        ], 500);
-    }
+    });
 });
 
 
