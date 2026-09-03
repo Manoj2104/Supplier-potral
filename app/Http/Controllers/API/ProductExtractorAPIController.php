@@ -30,10 +30,10 @@ class ProductExtractorAPIController extends AppBaseController
     public function extract(Request $request): JsonResponse
     {
         $requestId = 'req_' . time() . '_' . substr(md5(uniqid('', true)), 0, 8);
-        $mode = trim($request->input('mode', 'auto'));
-        $rawUrl = trim($request->input('url', ''));
-        $rawBarcode = preg_replace('/[^0-9]/', '', trim($request->input('barcode', '')));
-        $rawSearch = trim($request->input('search', ''));
+        $mode = trim((string)($request->input('mode') ?? $request->json('mode') ?? 'auto'));
+        $rawUrl = trim((string)($request->input('url') ?? $request->json('url') ?? ''));
+        $rawBarcode = preg_replace('/[^0-9]/', '', trim((string)($request->input('barcode') ?? $request->json('barcode') ?? '')));
+        $rawSearch = trim((string)($request->input('search') ?? $request->json('search') ?? ''));
         $uploadedImages = $request->file('images') ?? ($request->file('image') ? [$request->file('image')] : []);
 
         if ($mode === 'auto') {
@@ -67,7 +67,7 @@ class ProductExtractorAPIController extends AppBaseController
                     $rd = $registryResult['registry_data'];
                     $product = [
                         'name' => $rd['name'],
-                        'short_name' => substr($rd['name'], 0, 45),
+                        'short_name' => \App\Services\ProductIntelligence\UniversalShoppingExtractor::generateSmartShortName($rd['name']),
                         'brand' => $rd['brand'] ?? 'Unknown',
                         'category' => $rd['category'] ?? 'General Products',
                         'sub_category' => $rd['category'] ?? 'General',
@@ -145,9 +145,18 @@ class ProductExtractorAPIController extends AppBaseController
                 if (empty($rawUrl)) {
                     return $this->buildResponse($requestId, 'INVALID_REQUEST', null, 0, ['Please enter a product URL.'], 'Missing URL.');
                 }
-                if (!str_starts_with($rawUrl, 'http://') && !str_starts_with($rawUrl, 'https://')) {
+                
+                // Fix partial or missing protocol URLs
+                if (preg_match('/^(?:https?:\/\/)?(?:www\.)?(?:zepto|xto)\.com/i', $rawUrl) || (str_contains($rawUrl, '/pn/') && str_contains($rawUrl, '/pvid/'))) {
+                    if (!preg_match('/^https?:\/\//i', $rawUrl)) {
+                        $rawUrl = 'https://' . preg_replace('/^(?:xto|zepto)\.com/i', 'www.zepto.com', $rawUrl);
+                    } else {
+                        $rawUrl = preg_replace('/https?:\/\/(?:www\.)?xto\.com/i', 'https://www.zepto.com', $rawUrl);
+                    }
+                } elseif (!str_starts_with($rawUrl, 'http://') && !str_starts_with($rawUrl, 'https://')) {
                     $rawUrl = 'https://' . $rawUrl;
                 }
+                
                 $host = strtolower(parse_url($rawUrl, PHP_URL_HOST) ?? '');
                 $ssrfBlocked = in_array($host, ['localhost', '127.0.0.1', '0.0.0.0', '::1'], true)
                     || str_starts_with($host, '192.168.')
@@ -158,7 +167,18 @@ class ProductExtractorAPIController extends AppBaseController
                 }
                 
                 $normalizedUrl = $this->normalizeUrl($rawUrl);
-                $result = MarketplaceAdapterRegistry::resolve($normalizedUrl);
+                
+                // Primary: Universal Social/Headless Shopping Extractor (fast, robust, live images)
+                $result = null;
+                try {
+                    $result = \App\Services\ProductIntelligence\UniversalShoppingExtractor::extract($normalizedUrl);
+                } catch (\Throwable $e) {
+                    Log::warning('Universal extractor error: ' . $e->getMessage());
+                }
+
+                if (!$result || empty($result['name'])) {
+                    $result = MarketplaceAdapterRegistry::resolve($normalizedUrl);
+                }
                 if ($result) {
                     $existing = $this->checkExistingProduct($result['barcode'] ?? null, $result['name']);
                     $result['requestId']    = $requestId;
@@ -419,7 +439,7 @@ class ProductExtractorAPIController extends AppBaseController
                 }
                 return [
                     'name' => $title,
-                    'short_name' => substr($title, 0, 45),
+                    'short_name' => \App\Services\ProductIntelligence\UniversalShoppingExtractor::generateSmartShortName($title),
                     'brand' => $brand,
                     'category' => $p['categories'] ?? 'General Products',
                     'pack_size' => $p['quantity'] ?? '1 Unit',

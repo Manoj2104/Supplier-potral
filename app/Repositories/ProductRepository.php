@@ -80,6 +80,9 @@ class ProductRepository extends BaseRepository
     {
         try {
             DB::beginTransaction();
+            if (empty($input['short_name']) && !empty($input['name'])) {
+                $input['short_name'] = \App\Services\ProductIntelligence\UniversalShoppingExtractor::generateSmartShortName($input['name']);
+            }
             $product = $this->create($input);
             $reference_code = 'PR_' . $product->id;
             try {

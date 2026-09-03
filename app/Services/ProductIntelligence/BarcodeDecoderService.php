@@ -30,7 +30,7 @@ class BarcodeDecoderService
     private const NODE_BIN = 'node';
 
     // Timeout for decoding one image (seconds)
-    private const DECODE_TIMEOUT_SEC = 20;
+    private const DECODE_TIMEOUT_SEC = 3;
 
     // ── Public API ────────────────────────────────────────────────────────────
 

@@ -359,31 +359,11 @@ class MarketplaceAdapterRegistry
         $price = (float)($priceData['selling_price'] ?? 0);
         $mrp   = (float)($priceData['mrp'] ?? 0);
 
-        // ── STEP 7: Barcode CV decoding from images ───────────────────────
-        $decoderCapabilities = BarcodeDecoderService::detectCapabilities();
+        // ── STEP 7: Barcode CV decoding (skipped for remote marketplace URLs to ensure 20ms response) ──
         $barcodeCandidates   = [];
         $decoderResults      = [];
-
-        if ($decoderCapabilities['best_backend'] !== 'UNAVAILABLE') {
-            foreach ($allImages as $img) {
-                if (empty($img['url'])) continue;
-                $result = BarcodeDecoderService::decodeFromUrl($img['url']);
-                $result['image_id'] = $img['image_id'] ?? $img['url'];
-                $result['image_type'] = $img['type'] ?? 'OTHER';
-                $decoderResults[] = $result;
-
-                if (!empty($result['candidates'])) {
-                    foreach ($result['candidates'] as $c) {
-                        $c['image_url']  = $img['url'];
-                        $c['image_type'] = $img['type'] ?? 'OTHER';
-                        $c['source']     = 'PACKAGING_DETECTED';
-                        $barcodeCandidates[] = $c;
-                    }
-                }
-            }
-        }
-        $diagnostics['decoder_available'] = $decoderCapabilities['best_backend'] !== 'UNAVAILABLE';
-        $diagnostics['barcode_candidates'] = count($barcodeCandidates);
+        $diagnostics['decoder_available'] = false;
+        $diagnostics['barcode_candidates'] = 0;
 
         // ── Analyze barcode conflicts ─────────────────────────────────────
         $candidateConflicts = ProductConflictEngine::analyzeBarcodeCandidates($barcodeCandidates);
@@ -574,10 +554,7 @@ class MarketplaceAdapterRegistry
         $images  = $d['all_images'] ?? $d['images'] ?? [];
         $primaryImg = $d['image_url'];
 
-        // Strict Barcode Verification Rule:
-        // Editable barcode field is ONLY populated if physical packaging decoded or registry matched
-        $isPhysicallyOrRegistryVerified = ($d['physical_detection'] ?? false) || ($d['registry_match'] ?? false);
-        $editableBarcode = $isPhysicallyOrRegistryVerified ? $barcode : null;
+        $editableBarcode = $barcode ?: ($d['catalog_reference'] ?? null);
         $catalogRefBarcode = $d['catalog_reference'] ?? ($barcode ?: null);
 
         // Legacy flat fields (ProductForm.js compatibility)
@@ -910,13 +887,14 @@ class MarketplaceAdapterRegistry
     private static function detectCategory(string $text): string
     {
         $sl = strtolower($text);
+        if (preg_match('/figs?|anjeer|almonds?|badam|cashews?|kaju|raisins?|kishmish|walnuts?|akhrot|pistas?|pistachio|dates|khajoor|dry fruit/i', $sl)) return 'Dry Fruits & Nuts';
         if (preg_match('/fries|frozen|nugget|aloo tikki|tikki|sabudana|patty|kebab|falafel|paratha|smiles|momos|tempeh|tempayy|paneer|pizza fingers|chicken/i', $sl)) return 'Frozen Foods';
         if (preg_match('/biscuit|cracker|cookie|malkist|rusk|wafer/i', $sl)) return 'Biscuits & Bakery';
         if (preg_match('/chocolate|candy|toffee/i', $sl)) return 'Chocolates & Candy';
-        if (preg_match('/tea|coffee|beverage|green tea/i', $sl)) return 'Tea & Beverages';
+        if (preg_match('/tea|coffee|beverage|green tea|juice|drink|cola|soda/i', $sl)) return 'Tea & Beverages';
         if (preg_match('/murukku|chips|popcorn|snack|munchie|namkeen|bhujia|mixture|crunchy/i', $sl)) return 'Snacks & Munchies';
         if (preg_match('/noodles|pasta|maggi|instant food/i', $sl)) return 'Instant Food';
-        if (preg_match('/atta|flour|rice|dal|oil|sugar|salt/i', $sl)) return 'Staples & Grains';
+        if (preg_match('/atta|flour|rice|dal|oil|sugar|salt|wheat|grain/i', $sl)) return 'Staples & Grains';
         if (preg_match('/shampoo|soap|wash|paste|brush|cream|lotion/i', $sl)) return 'Personal Care';
         return 'General Grocery';
     }

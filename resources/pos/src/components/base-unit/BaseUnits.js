@@ -65,7 +65,7 @@ const BaseUnits = (props) => {
     const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
-        dispatch(fetchBaseUnits({ search: searchTerm }, !hasData));
+        dispatch(fetchBaseUnits({ search: searchTerm }, false));
 
         const unsubscribe = subscribePosDataChanged(() => {
             dispatch(fetchBaseUnits({ search: searchTerm }, false));
@@ -275,11 +275,8 @@ const BaseUnits = (props) => {
             <TopProgressBar />
             <TabTitle title={placeholderText('base-units.title')} />
 
-            {isLoadingSkeleton ? (
-                <MasterTableSkeleton />
-            ) : (
-                showCreateForm || editModel ? (
-                    <BaseUnitsForm
+            {showCreateForm || editModel ? (
+                <BaseUnitsForm
                         show={true}
                         handleClose={() => {
                             setShowCreateForm(false);
@@ -781,7 +778,7 @@ const BaseUnits = (props) => {
                         </div>
                     </div>
                 )
-            )}
+            }
 
             {/* 7. Slide-Out Detail Drawer */}
             {drawerUnit && (

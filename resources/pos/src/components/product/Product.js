@@ -43,10 +43,66 @@ import LiveCounter from "../../shared/components/LiveCounter";
 import LiveSparkline from "../../shared/components/LiveSparkline";
 import { subscribePosDataChanged } from "../../shared/posEvents";
 import getInstantProductImage, { generateInstantProductSvg } from "../../shared/instantProductSvg";
+// Smart Complete Sentence Short Display Name Generator (Max 35 chars, no chopped words)
+const generateSmartShortName = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    let clean = name.trim().replace(/\s+/g, ' ');
+    if (clean.length <= 35) return clean;
 
-// Short Unit Formatter - strictly standard Units format
-const formatShortUnit = (unitStr) => {
-    return "Units";
+    // 1. Extract Pack/Set/Combo suffix e.g. "(Pack of 2)"
+    let packSuffix = '';
+    const packMatch = clean.match(/\s*\(?(?:pack|set|combo)\s*(?:of)?\s*(\d+)\)?/i);
+    if (packMatch) {
+        packSuffix = ` (Pack of ${packMatch[1]})`;
+    }
+
+    // 2. Strip brackets and pack phrase from base
+    let base = clean
+        .replace(/\s*\(.*?\)/g, '')
+        .replace(/\s*\[.*?\]/g, '')
+        .replace(/\s*(?:pack|set|combo)\s*(?:of)?\s*\d+/gi, '')
+        .trim();
+
+    // Marketing & descriptive filler words to remove in priority order to keep core noun & sentence complete
+    const fluffWords = [
+        'Super Combed', '100% Pure Cotton', '100% Cotton', '100% Pure', '100%',
+        'Pure Cotton', 'Cotton Rib', 'Cotton', 'Underwear', 'Solid',
+        'Casual', 'Classic', 'Premium Quality', 'Premium', 'Finest Quality',
+        'Finest', 'Ultra Soft', 'Original', 'Authentic', 'Imported',
+        "Men's", "Womens", "Women's", "Mens", "Boys", "Girls"
+    ];
+
+    let trimmedBase = base;
+    for (const fw of fluffWords) {
+        if ((trimmedBase + packSuffix).trim().length <= 35) break;
+        const regex = new RegExp(`\\b${fw.replace(/['"]/g, "['\"`]?")}\\b`, 'gi');
+        trimmedBase = trimmedBase.replace(regex, '').replace(/\s{2,}/g, ' ').trim();
+    }
+
+    let candidate = (trimmedBase + packSuffix).trim();
+    if (candidate.length <= 35 && candidate.length >= 8) {
+        return candidate;
+    }
+
+    // 3. Word boundary fit if still too long
+    const maxBase = 35 - packSuffix.length;
+    if (maxBase >= 8 && trimmedBase.length > maxBase) {
+        let sub = trimmedBase.substring(0, maxBase);
+        const lastSpace = sub.lastIndexOf(' ');
+        if (lastSpace > 5) {
+            sub = sub.substring(0, lastSpace);
+        }
+        const cand = (sub.trim() + packSuffix).trim();
+        if (cand.length <= 35) return cand;
+    }
+
+    // 4. Safe fallback: clean word boundary cut <= 35 chars (never cut words in half!)
+    let sub = clean.substring(0, 35);
+    const lastSpace = sub.lastIndexOf(' ');
+    if (lastSpace > 10) {
+        sub = sub.substring(0, lastSpace);
+    }
+    return sub.trim();
 };
 
 // Enterprise Alphanumeric SKU Formatter / Generator
@@ -291,11 +347,12 @@ const Product = (props) => {
             // 3. Product Title
             const name = safeString(attrs.name || product.name, 'Untitled Product');
 
-            // 3b. Short Display Name (max 35 chars)
-            const shortName = safeString(
-                attrs.short_name || subProd.short_name || attrs.pos_name || subProd.pos_name,
-                name.length > 35 ? name.substring(0, 35).trim() : name
-            );
+            // 3b. Smart Short Display Name (Complete sentence/words, max 35 chars)
+            let rawShort = attrs.short_name || subProd.short_name || attrs.pos_name || subProd.pos_name;
+            if (!rawShort || rawShort === "—" || rawShort.endsWith("Cott") || (rawShort.length === 35 && !rawShort.endsWith(')'))) {
+                rawShort = generateSmartShortName(name);
+            }
+            const shortName = safeString(rawShort, generateSmartShortName(name));
 
             // 4. Real Brand
             const brand = safeString(attrs.brand_name || (attrs.brand && (attrs.brand.name || attrs.brand.attributes?.name)) || subProd.brand_name, "—");
@@ -1214,32 +1271,37 @@ const Product = (props) => {
                         <div className={`prod-drawer-slide-over ${isDrawerClosing ? "closing" : ""}`}>
                             {/* Header */}
                             <div className="prod-drawer-header-row">
-                                <div>
-                                    <div className="prod-drawer-title-name">{selectedDrawerProd.name}</div>
-                                    <span className={selectedDrawerProd.status === "Active" ? "prod-status-active" : (selectedDrawerProd.status === "Low Stock" ? "prod-status-lowstock" : "prod-status-outofstock")}>
-                                        {selectedDrawerProd.status}
-                                    </span>
+                                <div style={{ flex: 1, minWidth: 0, paddingRight: "12px" }}>
+                                    <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                                        <span className="badge bg-light text-secondary border px-2 py-0.5" style={{ fontSize: '11px', fontWeight: '600' }}>
+                                            {selectedDrawerProd.category_name || "Catalog Product"}
+                                        </span>
+                                        <span className={`unit-status-pill ${selectedDrawerProd.in_stock > 10 ? 'active' : (selectedDrawerProd.in_stock > 0 ? 'draft' : 'inactive')}`} style={{ padding: '2px 8px', fontSize: '11px', fontWeight: '700' }}>
+                                            <span className="unit-dot" /> {selectedDrawerProd.status}
+                                        </span>
+                                    </div>
+                                    <div className="prod-drawer-title-name" title={selectedDrawerProd.name}>
+                                        {selectedDrawerProd.name}
+                                    </div>
                                 </div>
                                 <button
-                                    className="btn btn-light rounded-circle d-flex align-items-center justify-content-center p-0"
-                                    style={{ width: 34, height: 34, border: "1px solid #E2E8F0" }}
+                                    className="prod-drawer-close-btn"
                                     onClick={handleCloseDrawer}
+                                    title="Close (Esc)"
                                 >
-                                    <FontAwesomeIcon icon={faTimes} style={{ fontSize: "16px", color: "#64748B" }} />
+                                    <FontAwesomeIcon icon={faTimes} />
                                 </button>
                             </div>
 
                             {/* Sub Tabs */}
-                            <div className="prod-drawer-tabs-row" style={{ overflowX: 'auto', whiteSpace: 'nowrap', display: 'flex', gap: '8px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                            <div className="prod-drawer-tabs-row">
                                 <span className={`prod-drawer-tab-link ${drawerTab === "Overview" ? "active" : ""}`} onClick={() => setDrawerTab("Overview")}>Overview</span>
                                 <span className={`prod-drawer-tab-link ${drawerTab === "Pricing" ? "active" : ""}`} onClick={() => setDrawerTab("Pricing")}>Pricing</span>
                                 <span className={`prod-drawer-tab-link ${drawerTab === "Inventory" ? "active" : ""}`} onClick={() => setDrawerTab("Inventory")}>Inventory</span>
                                 <span className={`prod-drawer-tab-link ${drawerTab === "Units" ? "active" : ""}`} onClick={() => setDrawerTab("Units")}>Units</span>
                                 <span className={`prod-drawer-tab-link ${drawerTab === "Supplier" ? "active" : ""}`} onClick={() => setDrawerTab("Supplier")}>Supplier</span>
                                 <span className={`prod-drawer-tab-link ${drawerTab === "Warehouse" ? "active" : ""}`} onClick={() => setDrawerTab("Warehouse")}>Warehouse</span>
-                                <span className={`prod-drawer-tab-link ${drawerTab === "Batch" ? "active" : ""}`} onClick={() => setDrawerTab("Batch")}>Batch / Expiry</span>
                                 <span className={`prod-drawer-tab-link ${drawerTab === "POS" ? "active" : ""}`} onClick={() => setDrawerTab("POS")}>POS Settings</span>
-                                <span className={`prod-drawer-tab-link ${drawerTab === "Audit" ? "active" : ""}`} onClick={() => setDrawerTab("Audit")}>Audit</span>
                             </div>
 
                             {/* Scrollable Body */}
@@ -1248,7 +1310,7 @@ const Product = (props) => {
                                     <img
                                         src={selectedDrawerProd.images || generateInstantProductSvg(selectedDrawerProd.name, selectedDrawerProd.category_name)}
                                         alt=""
-                                        style={{ maxHeight: "170px", maxWidth: "100%", objectFit: "contain" }}
+                                        style={{ maxHeight: "155px", maxWidth: "100%", objectFit: "contain" }}
                                         onError={(e) => {
                                             e.target.onerror = null;
                                             e.target.src = generateInstantProductSvg(selectedDrawerProd.name, selectedDrawerProd.category_name);
@@ -1256,17 +1318,60 @@ const Product = (props) => {
                                     />
                                 </div>
 
+                                {/* Quick Metric Strip */}
+                                <div className="prod-drawer-stat-strip">
+                                    <div className="prod-drawer-stat-card-box">
+                                        <div className="prod-drawer-stat-lbl">Selling Price</div>
+                                        <div className="prod-drawer-stat-val emerald">{currencySymbol}{selectedDrawerProd.product_price.toFixed(2)}</div>
+                                    </div>
+                                    <div className="prod-drawer-stat-card-box">
+                                        <div className="prod-drawer-stat-lbl">In Stock</div>
+                                        <div className="prod-drawer-stat-val blue">{selectedDrawerProd.in_stock} {selectedDrawerProd.base_unit}</div>
+                                    </div>
+                                    <div className="prod-drawer-stat-card-box">
+                                        <div className="prod-drawer-stat-lbl">SKU Code</div>
+                                        <div className="prod-drawer-stat-val" style={{ fontFamily: 'monospace', fontSize: '13px' }}>{selectedDrawerProd.sku}</div>
+                                    </div>
+                                </div>
+
                                 {/* 1. Overview Tab */}
                                 {drawerTab === "Overview" && (
                                     <table className="prod-drawer-meta-table">
                                         <tbody>
                                             <tr><td>Product Name</td><td className="fw-bold text-dark">{selectedDrawerProd.name}</td></tr>
-                                            <tr><td>Short Display Name</td><td className="fw-semibold text-success">🏷️ {selectedDrawerProd.short_name || selectedDrawerProd.pos_name || (selectedDrawerProd.name?.length > 35 ? selectedDrawerProd.name.substring(0, 35) : selectedDrawerProd.name)}</td></tr>
-                                            <tr><td>SKU / Code</td><td className="text-primary font-monospace fw-bold">{selectedDrawerProd.sku}</td></tr>
+                                            <tr>
+                                                <td>Short Display Name</td>
+                                                <td>
+                                                    <span style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: "6px",
+                                                        padding: "3px 10px",
+                                                        borderRadius: "8px",
+                                                        fontSize: "12px",
+                                                        fontWeight: "700",
+                                                        background: "#ECFDF5",
+                                                        color: "#065F46",
+                                                        border: "1px solid #A7F3D0"
+                                                    }}>
+                                                        🏷️ {selectedDrawerProd.short_name || selectedDrawerProd.pos_name || (selectedDrawerProd.name?.length > 35 ? selectedDrawerProd.name.substring(0, 35) : selectedDrawerProd.name)}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td>SKU / Code</td>
+                                                <td>
+                                                    <span className="font-monospace fw-bold text-primary px-2 py-1 rounded" style={{ background: '#EFF6FF', border: '1px solid #BFDBFE' }}>
+                                                        {selectedDrawerProd.sku}
+                                                    </span>
+                                                </td>
+                                            </tr>
                                             <tr>
                                                 <td>Barcode</td>
                                                 <td>
-                                                    <span className="font-monospace fw-bold text-dark">{selectedDrawerProd.barcode}</span>
+                                                    <span className="font-monospace fw-bold text-dark px-2 py-1 bg-light rounded border" style={{ letterSpacing: '0.5px' }}>
+                                                        {selectedDrawerProd.barcode}
+                                                    </span>
                                                 </td>
                                             </tr>
                                             <tr><td>Brand</td><td className="fw-semibold text-dark">{selectedDrawerProd.brand_name}</td></tr>

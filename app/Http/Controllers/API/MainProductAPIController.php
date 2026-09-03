@@ -89,8 +89,15 @@ class MainProductAPIController extends AppBaseController
             DB::beginTransaction();
 
             $productRepo = app(ProductRepository::class);
+            $shortName = !empty($input['short_name']) ? trim($input['short_name']) : '';
+            if (empty($shortName) || mb_strlen($shortName) > 35) {
+                $shortName = \App\Services\ProductIntelligence\UniversalShoppingExtractor::generateSmartShortName($input['name']);
+            }
+            $input['short_name'] = $shortName;
+
             $mainProduct = MainProduct::create([
                 'name' => $input['name'],
+                'short_name' => $shortName,
                 'code' => $input['product_code'],
                 'product_unit' => $input['product_unit'],
                 'product_type' => $input['product_type'],
@@ -123,14 +130,39 @@ class MainProductAPIController extends AppBaseController
                 $commonProductInput = Arr::except($input, 'variation_data');
 
                 $variationData = $input['variation_data'];
+                if (is_string($variationData)) {
+                    $variationData = json_decode($variationData, true) ?: [];
+                }
                 foreach ($variationData as $key => $variation) {
-                    $variation = array_merge($variation, $commonProductInput);
+                    $variation = array_merge($commonProductInput, $variation);
+                    if (empty($variation['code']) || $variation['code'] === $mainProduct->product_code) {
+                        $variation['code'] = $mainProduct->product_code . '-V' . ($key + 1);
+                    }
                     $product = $productRepo->storeProduct($variation);
+
+                    // Ensure valid variation_id and variation_type_id to satisfy foreign key constraints
+                    $vId = $variation['variation_id'] ?? null;
+                    if (!$vId || !\App\Models\Variation::where('id', $vId)->exists()) {
+                        $firstVar = \App\Models\Variation::first();
+                        $vId = $firstVar ? $firstVar->id : 1;
+                    }
+
+                    $vtId = $variation['variation_type_id'] ?? null;
+                    if (!$vtId || !\App\Models\VariationType::where('id', $vtId)->exists()) {
+                        $firstVt = \App\Models\VariationType::where('variation_id', $vId)->first();
+                        if (!$firstVt) {
+                            $firstVt = \App\Models\VariationType::create([
+                                'name' => !empty($variation['name']) ? $variation['name'] : 'Standard',
+                                'variation_id' => $vId
+                            ]);
+                        }
+                        $vtId = $firstVt->id;
+                    }
 
                     VariationProduct::create([
                         'product_id' => $product->id,
-                        'variation_id' => $variation['variation_id'],
-                        'variation_type_id' => $variation['variation_type_id'],
+                        'variation_id' => $vId,
+                        'variation_type_id' => $vtId,
                         'main_product_id' => $mainProduct->id,
                     ]);
                 }
@@ -151,8 +183,15 @@ class MainProductAPIController extends AppBaseController
         $input = $request->all();
         $mainProduct = MainProduct::find($id);
 
+        $shortName = !empty($input['short_name']) ? trim($input['short_name']) : '';
+        if (empty($shortName) || mb_strlen($shortName) > 35) {
+            $shortName = \App\Services\ProductIntelligence\UniversalShoppingExtractor::generateSmartShortName($input['name']);
+        }
+        $input['short_name'] = $shortName;
+
         $mainProduct->update([
             'name' => $input['name'],
+            'short_name' => $shortName,
             'code' => $input['product_code'],
             'product_unit' => $input['product_unit'],
         ]);

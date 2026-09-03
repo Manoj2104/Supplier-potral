@@ -43,7 +43,7 @@ abstract class AbstractMarketplaceAdapter
         return $result;
     }
 
-    protected function safeGet(string $url, int $timeout = 6): ?string
+    protected function safeGet(string $url, int $timeout = 2): ?string
     {
         $agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
@@ -55,9 +55,10 @@ abstract class AbstractMarketplaceAdapter
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT        => $timeout,
+                CURLOPT_CONNECTTIMEOUT => 1,
                 CURLOPT_USERAGENT      => $agents[array_rand($agents)],
                 CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_MAXREDIRS      => 3,
+                CURLOPT_MAXREDIRS      => 2,
                 CURLOPT_SSL_VERIFYPEER => false,
                 CURLOPT_HTTPHEADER     => [
                     'Accept: text/html,application/xhtml+xml,application/json,*/*;q=0.8',
@@ -81,7 +82,8 @@ abstract class AbstractMarketplaceAdapter
             curl_setopt_array($ch, [
                 CURLOPT_NOBODY         => true,
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 2,
+                CURLOPT_TIMEOUT        => 1,
+                CURLOPT_CONNECTTIMEOUT => 1,
                 CURLOPT_USERAGENT      => 'Mozilla/5.0',
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_SSL_VERIFYPEER => false,

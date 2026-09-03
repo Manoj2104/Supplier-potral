@@ -45,6 +45,7 @@
         "faker": "^5.5.3",
         "fortawesome": "^0.0.1-security",
         "history": "^5.0.0",
+        "jsbarcode": "^3.12.3",
         "lucide-react": "^1.27.0",
         "mini-css-extract-plugin": "^2.5.3",
         "moment": "^2.29.3",

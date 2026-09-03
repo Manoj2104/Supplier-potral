@@ -151,6 +151,67 @@ const RealBarcodeCanvas = ({ value = '' }) => {
     );
 };
 
+export const generateSmartShortName = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    let clean = name.trim().replace(/\s+/g, ' ');
+    if (clean.length <= 35) return clean;
+
+    // 1. Extract Pack/Set/Combo suffix e.g. "(Pack of 2)"
+    let packSuffix = '';
+    const packMatch = clean.match(/\s*\(?(?:pack|set|combo)\s*(?:of)?\s*(\d+)\)?/i);
+    if (packMatch) {
+        packSuffix = ` (Pack of ${packMatch[1]})`;
+    }
+
+    // 2. Strip brackets and pack phrase from base
+    let base = clean
+        .replace(/\s*\(.*?\)/g, '')
+        .replace(/\s*\[.*?\]/g, '')
+        .replace(/\s*(?:pack|set|combo)\s*(?:of)?\s*\d+/gi, '')
+        .trim();
+
+    // Marketing & descriptive filler words to remove in priority order to keep core noun & sentence complete
+    const fluffWords = [
+        'Super Combed', '100% Pure Cotton', '100% Cotton', '100% Pure', '100%',
+        'Pure Cotton', 'Cotton Rib', 'Cotton', 'Underwear', 'Solid',
+        'Casual', 'Classic', 'Premium Quality', 'Premium', 'Finest Quality',
+        'Finest', 'Ultra Soft', 'Original', 'Authentic', 'Imported',
+        "Men's", "Womens", "Women's", "Mens", "Boys", "Girls"
+    ];
+
+    let trimmedBase = base;
+    for (const fw of fluffWords) {
+        if ((trimmedBase + packSuffix).trim().length <= 35) break;
+        const regex = new RegExp(`\\b${fw.replace(/['"]/g, "['\"`]?")}\\b`, 'gi');
+        trimmedBase = trimmedBase.replace(regex, '').replace(/\s{2,}/g, ' ').trim();
+    }
+
+    let candidate = (trimmedBase + packSuffix).trim();
+    if (candidate.length <= 35 && candidate.length >= 8) {
+        return candidate;
+    }
+
+    // 3. Word boundary fit if still too long
+    const maxBase = 35 - packSuffix.length;
+    if (maxBase >= 8 && trimmedBase.length > maxBase) {
+        let sub = trimmedBase.substring(0, maxBase);
+        const lastSpace = sub.lastIndexOf(' ');
+        if (lastSpace > 5) {
+            sub = sub.substring(0, lastSpace);
+        }
+        const cand = (sub.trim() + packSuffix).trim();
+        if (cand.length <= 35) return cand;
+    }
+
+    // 4. Safe fallback: clean word boundary cut <= 35 chars (never cut words in half!)
+    let sub = clean.substring(0, 35);
+    const lastSpace = sub.lastIndexOf(' ');
+    if (lastSpace > 10) {
+        sub = sub.substring(0, lastSpace);
+    }
+    return sub.trim();
+};
+
 const ProductForm = (props) => {
     const {
         addProduct,
@@ -210,6 +271,7 @@ const ProductForm = (props) => {
     // Local form state
     const [productValue, setProductValue] = useState({
         name: '',
+        short_name: '',
         product_type: '1',
         barcode_symbol: '1',
         sku: '',
@@ -713,9 +775,13 @@ const ProductForm = (props) => {
                     setComboItems(initialComboItems);
                 }
 
+                const extractedShortName = generateSmartShortName(data.short_name || data.name || '');
+
                 setProductValue(prev => ({
                     ...prev,
                     name: data.name || prev.name || '',
+                    short_name: extractedShortName || prev.short_name || '',
+                    pos_name: extractedShortName || prev.pos_name || '',
                     product_type: detectedType,
                     barcode_symbol: '1',
                     sku: data.sku || smartSku,
@@ -1209,6 +1275,9 @@ const ProductForm = (props) => {
             const formData = new FormData();
             formData.append('product_type', productValue.product_type || '1');
             formData.append('name', productValue.name || '');
+            const finalShortName = (productValue.short_name || productValue.pos_name || productValue.name || '').substring(0, 35);
+            formData.append('short_name', finalShortName);
+            formData.append('pos_name', finalShortName);
             formData.append('code', productValue.code || productValue.sku || '');
             formData.append('product_code', productValue.sku || productValue.code || '');
             formData.append('product_cost', costVal);
@@ -1849,10 +1918,10 @@ const ProductForm = (props) => {
                                         <div className="prod-field-group span-2">
                                             <div className="prod-field-header">
                                                 <label className="prod-field-label">
-                                                    Product Name (Full Master Title) <span className="req">*</span>
+                                                    Product Name <span className="req">*</span>
                                                     {autofillActive && productValue.name && <span className="prod-field-autofilled-badge">✨ AI Filled</span>}
                                                 </label>
-                                                <span className="prod-field-hint">{productValue.name?.length || 0} / 255 characters</span>
+                                                <span className="prod-field-hint">{productValue.name?.length || 0} characters</span>
                                             </div>
                                             <input
                                                 type="text"
@@ -1862,48 +1931,72 @@ const ProductForm = (props) => {
                                                 value={productValue.name}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
+                                                    const autoShort = generateSmartShortName(val);
                                                     setProductValue(prev => ({
                                                         ...prev,
                                                         name: val,
-                                                        pos_name: prev.pos_name && prev.pos_name !== (prev.name?.length > 35 ? prev.name.substring(0, 35) : prev.name) ? prev.pos_name : (val.length > 35 ? val.substring(0, 35).trim() : val),
+                                                        short_name: prev.short_name && prev.short_name !== generateSmartShortName(prev.name) ? prev.short_name : autoShort,
+                                                        pos_name: prev.pos_name && prev.pos_name !== generateSmartShortName(prev.name) ? prev.pos_name : autoShort,
                                                         sku: prev.sku || generateSmartSku(val)
                                                     }));
+                                                    if (errors.name) setErrors(prev => ({ ...prev, name: null }));
                                                 }}
                                             />
                                             {errors.name && <span className="text-danger small mt-1">{errors.name}</span>}
                                         </div>
 
-                                        {/* Display Name / Short Name (For Thermal Receipts & POS Tiles) */}
+                                        {/* Short Display Name (Max 35 chars for Product Lists, Receipts & POS Tiles) */}
                                         <div className="prod-field-group span-2">
                                             <div className="prod-field-header">
-                                                <label className="prod-field-label d-flex align-items-center gap-1.5 flex-wrap">
-                                                    <span>Display Name / Short Name (POS & Receipts)</span>
+                                                <div className="d-flex align-items-center gap-2 flex-wrap">
+                                                    <label className="prod-field-label m-0">
+                                                        Short Display Name <span className="req">*</span>
+                                                    </label>
                                                     <span className="badge bg-light text-secondary border px-2 py-0.5" style={{ fontSize: '10.5px', fontWeight: '600' }}>
                                                         Max 35 chars
                                                     </span>
-                                                    {autofillActive && productValue.pos_name && <span className="prod-field-autofilled-badge">✨ Auto Shortened</span>}
-                                                </label>
-                                                <span className={`prod-field-hint ${(productValue.pos_name?.length || 0) > 35 ? 'text-danger fw-bold' : ''}`}>
-                                                    {productValue.pos_name?.length || 0} / 35 characters
-                                                </span>
+                                                    {autofillActive && (productValue.short_name || productValue.pos_name) && (
+                                                        <span className="prod-field-autofilled-badge">✨ Auto Generated</span>
+                                                    )}
+                                                </div>
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <span className={`prod-field-hint ${((productValue.short_name || productValue.pos_name)?.length || 0) >= 35 ? 'text-danger fw-bold' : ''}`}>
+                                                        {((productValue.short_name || productValue.pos_name)?.length || 0)} / 35 characters
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        className="prod-badge-btn-action"
+                                                        onClick={() => {
+                                                            const auto = generateSmartShortName(productValue.name || '');
+                                                            setProductValue(prev => ({ ...prev, short_name: auto, pos_name: auto }));
+                                                            addToast({ text: `✓ Smart Short Name generated: ${auto}`, type: 'success' });
+                                                        }}
+                                                        title="Auto-generate complete sentence from Product Name"
+                                                    >
+                                                        + Auto Generate
+                                                    </button>
+                                                </div>
                                             </div>
                                             <input
                                                 type="text"
-                                                className={`prod-input ${autofillActive ? 'prod-input-autofilled' : ''}`}
+                                                className={`prod-input ${autofillActive ? 'prod-input-autofilled' : ''} ${errors.short_name ? 'border-danger' : ''}`}
                                                 placeholder="e.g. Jockey 8015 Trunk (Pack of 2)"
-                                                maxLength={50}
-                                                value={productValue.pos_name || ''}
+                                                maxLength={35}
+                                                value={productValue.short_name || productValue.pos_name || ''}
                                                 onChange={(e) => {
-                                                    const val = e.target.value;
+                                                    const val = e.target.value.substring(0, 35);
                                                     setProductValue(prev => ({
                                                         ...prev,
+                                                        short_name: val,
                                                         pos_name: val
                                                     }));
+                                                    if (errors.short_name) setErrors(prev => ({ ...prev, short_name: null }));
                                                 }}
                                             />
                                             <span className="text-muted small mt-1" style={{ fontSize: '11.5px', display: 'block' }}>
-                                                Optimal for 58mm/80mm Thermal Receipt Printers, Barcode Label Tags, and POS Touch Screen Grid Tiles.
+                                                Auto-generated from Product Name (max 35 chars). Displayed on Product Catalog Table, 58mm/80mm Thermal Receipts, and POS Touch Screen.
                                             </span>
+                                            {errors.short_name && <span className="text-danger small mt-1">{errors.short_name}</span>}
                                         </div>
 
                                         {/* Product Type */}
@@ -3044,9 +3137,9 @@ const ProductForm = (props) => {
                         <div className="prod-summary-title">
                             {productValue.name || 'New Product Title'}
                         </div>
-                        {(productValue.pos_name || (productValue.name && productValue.name.length > 35)) && (
+                        {(productValue.short_name || productValue.pos_name || (productValue.name && productValue.name.length > 35)) && (
                             <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px', fontWeight: '600' }}>
-                                <span style={{ color: '#2563EB', fontWeight: '700' }}>Display:</span> {productValue.pos_name || productValue.name.substring(0, 35)}
+                                <span style={{ color: '#059669', fontWeight: '700' }}>Short Display:</span> {productValue.short_name || productValue.pos_name || productValue.name.substring(0, 35)}
                             </div>
                         )}
 

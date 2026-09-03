@@ -30,22 +30,25 @@ class BaseUnitAPIController extends AppBaseController
 
     public function index(Request $request): BaseUnitCollection
     {
-        $perPage = getPageSize($request);
-        $query = \App\Models\BaseUnit::query();
+        $cacheKey = 'base_units_api_' . md5(json_encode($request->all()));
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 30, function () use ($request) {
+            $perPage = getPageSize($request);
+            $query = \App\Models\BaseUnit::query();
 
-        $search = $request->filter['search'] ?? ($request->get('search') ?? '');
-        if (!empty($search)) {
-            $query->where('name', 'LIKE', "%$search%");
-        }
+            $search = $request->filter['search'] ?? ($request->get('search') ?? '');
+            if (!empty($search)) {
+                $query->where('name', 'LIKE', "%$search%");
+            }
 
-        $baseUnits = $perPage > 0 ? $query->paginate($perPage) : $query->paginate(100);
+            $baseUnits = $perPage > 0 ? $query->paginate($perPage) : $query->paginate(100);
 
-        // Eager-load units count so prepareAttributes has no N+1 queries
-        $baseUnits->loadCount('units');
+            // Eager-load units count so prepareAttributes has no N+1 queries
+            $baseUnits->loadCount('units');
 
-        BaseUnitResource::usingWithCollection();
+            BaseUnitResource::usingWithCollection();
 
-        return new BaseUnitCollection($baseUnits);
+            return new BaseUnitCollection($baseUnits);
+        });
     }
 
     /**
