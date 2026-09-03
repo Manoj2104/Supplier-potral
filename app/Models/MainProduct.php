@@ -15,6 +15,7 @@ class MainProduct extends Model implements HasMedia, JsonResourceful
 
     protected $fillable = [
         'name',
+        'short_name',
         'code',
         'product_unit',
         'product_type',
@@ -36,6 +37,7 @@ class MainProduct extends Model implements HasMedia, JsonResourceful
 
     protected $casts = [
         'name' => 'string',
+        'short_name' => 'string',
         'code' => 'string',
         'product_unit' => 'string',
         'product_type' => 'integer',
@@ -62,6 +64,7 @@ class MainProduct extends Model implements HasMedia, JsonResourceful
 
         $fields = [
             'name' => $this->name,
+            'short_name' => $this->short_name ?: mb_substr($this->name, 0, 35),
             'code' => $this->code,
             'product_unit' => $this->getProductUnitName($this->product_unit),
             'product_type' => $this->product_type,
@@ -95,13 +98,26 @@ class MainProduct extends Model implements HasMedia, JsonResourceful
         /** @var Media $media */
         $medias = $this->getMedia(MainProduct::PATH);
         $images = [];
-        if (!empty($medias)) {
+        if (!empty($medias) && count($medias) > 0) {
             foreach ($medias as $key => $media) {
                 $images['imageUrls'][$key] = str_replace('\\', '/', $media->getFullUrl());
                 $images['id'][$key] = $media->id;
             }
 
             return $images;
+        }
+
+        // Child sub-products fallback
+        $subProduct = $this->products()->has('media')->with('media')->first();
+        if ($subProduct) {
+            $subMedias = $subProduct->getMedia(Product::PATH);
+            if (!empty($subMedias) && count($subMedias) > 0) {
+                foreach ($subMedias as $key => $media) {
+                    $images['imageUrls'][$key] = str_replace('\\', '/', $media->getFullUrl());
+                    $images['id'][$key] = $media->id;
+                }
+                return $images;
+            }
         }
 
         return '';

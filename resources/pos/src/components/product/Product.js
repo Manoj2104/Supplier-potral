@@ -291,6 +291,12 @@ const Product = (props) => {
             // 3. Product Title
             const name = safeString(attrs.name || product.name, 'Untitled Product');
 
+            // 3b. Short Display Name (max 35 chars)
+            const shortName = safeString(
+                attrs.short_name || subProd.short_name || attrs.pos_name || subProd.pos_name,
+                name.length > 35 ? name.substring(0, 35).trim() : name
+            );
+
             // 4. Real Brand
             const brand = safeString(attrs.brand_name || (attrs.brand && (attrs.brand.name || attrs.brand.attributes?.name)) || subProd.brand_name, "—");
 
@@ -343,13 +349,15 @@ const Product = (props) => {
                 ? `${attrs.order_tax}%`
                 : "0%";
             const hsnVal = safeString(attrs.hsn_code, "19059090");
-            const imageUrl = getInstantProductImage(attrs.images || attrs.image_url || subProd.image_url, name, cat);
+            const rawImgObj = attrs.images || attrs.image_url || subProd.images || subProd.image_url || (subProducts[0] && (subProducts[0].images || subProducts[0].image_url));
+            const imageUrl = getInstantProductImage(rawImgObj, name, cat);
 
             return {
                 id: product.id || attrs.id,
                 sku: skuVal,
                 barcode: barcodeVal,
                 name,
+                short_name: shortName,
                 brand_name: brand,
                 category_name: cat,
                 sub_category_name: subCat,
@@ -889,6 +897,7 @@ const Product = (props) => {
                                         </th>
                                         <th style={{ width: "44px", whiteSpace: "nowrap" }}>IMAGE</th>
                                         <th style={{ minWidth: "160px", whiteSpace: "nowrap" }}>PRODUCT &amp; BRAND</th>
+                                        <th style={{ minWidth: "170px", whiteSpace: "nowrap" }}>SHORT NAME</th>
                                         <th style={{ minWidth: "125px", whiteSpace: "nowrap" }}>SKU / CODE</th>
                                         <th style={{ minWidth: "135px", whiteSpace: "nowrap" }}>BARCODE</th>
                                         <th style={{ minWidth: "110px", whiteSpace: "nowrap" }}>CATEGORY</th>
@@ -905,7 +914,7 @@ const Product = (props) => {
                                 <tbody>
                                     {paginatedProducts.length === 0 ? (
                                         <tr>
-                                            <td colSpan="14" style={{ textAlign: 'center', padding: '60px 20px', border: 'none' }}>
+                                            <td colSpan="15" style={{ textAlign: 'center', padding: '60px 20px', border: 'none' }}>
                                                 <div style={{ padding: '20px', textAlign: 'center' }}>
                                                     <div style={{ width: '68px', height: '68px', borderRadius: '22px', background: '#DCFCE7', color: '#16A34A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', margin: '0 auto 16px auto', boxShadow: '0 4px 14px rgba(22, 163, 74, 0.12)' }}>
                                                         <FontAwesomeIcon icon={faBoxOpen} />
@@ -962,12 +971,55 @@ const Product = (props) => {
                                                         />
                                                     </td>
                                                     <td style={{ whiteSpace: "nowrap" }}>
-                                                        <div style={{ fontWeight: "800", fontSize: "13.5px", color: "#0F172A", lineHeight: "1.3", whiteSpace: "nowrap" }}>
-                                                            {prod.name}
+                                                        <div
+                                                            title={prod.name}
+                                                            style={{
+                                                                fontWeight: "800",
+                                                                fontSize: "13.5px",
+                                                                color: "#0F172A",
+                                                                lineHeight: "1.3",
+                                                                whiteSpace: "nowrap",
+                                                                cursor: "help"
+                                                            }}
+                                                        >
+                                                            {prod.name && prod.name.length > 20
+                                                                ? `${prod.name.substring(0, 20)}...`
+                                                                : prod.name}
                                                         </div>
-                                                        <div style={{ fontSize: "11.5px", color: "#64748B", marginTop: "2px", whiteSpace: "nowrap" }}>
-                                                            {prod.brand_name || "General Brand"}
+                                                        <div
+                                                            title={prod.brand_name || "General Brand"}
+                                                            style={{
+                                                                fontSize: "11.5px",
+                                                                color: "#64748B",
+                                                                marginTop: "2px",
+                                                                whiteSpace: "nowrap"
+                                                            }}
+                                                        >
+                                                            {prod.brand_name && prod.brand_name.length > 20
+                                                                ? `${prod.brand_name.substring(0, 20)}...`
+                                                                : (prod.brand_name || "General Brand")}
                                                         </div>
+                                                    </td>
+                                                    <td style={{ whiteSpace: "nowrap" }}>
+                                                        <span style={{
+                                                            display: "inline-flex",
+                                                            alignItems: "center",
+                                                            gap: "6px",
+                                                            padding: "4px 11px",
+                                                            borderRadius: "8px",
+                                                            fontSize: "12px",
+                                                            fontWeight: "700",
+                                                            background: "#F8FAFC",
+                                                            color: "#0F172A",
+                                                            border: "1px solid #CBD5E1",
+                                                            fontFamily: "system-ui, -apple-system, sans-serif",
+                                                            whiteSpace: "nowrap"
+                                                        }} title={prod.short_name}>
+                                                            <span style={{ color: "#059669", fontSize: "11px" }}>🏷️</span>
+                                                            <span>
+                                                                {prod.short_name || (prod.name ? prod.name.substring(0, 35) : "—")}
+                                                            </span>
+                                                        </span>
                                                     </td>
                                                     <td style={{ whiteSpace: "nowrap" }}>
                                                         <span style={{
@@ -1208,8 +1260,8 @@ const Product = (props) => {
                                 {drawerTab === "Overview" && (
                                     <table className="prod-drawer-meta-table">
                                         <tbody>
-                                            <tr><td>Product Name (Full)</td><td className="fw-bold text-dark">{selectedDrawerProd.name}</td></tr>
-                                            <tr><td>Display Name (POS)</td><td className="fw-semibold text-primary">{selectedDrawerProd.pos_name || (selectedDrawerProd.name?.length > 35 ? selectedDrawerProd.name.substring(0, 35) : selectedDrawerProd.name)}</td></tr>
+                                            <tr><td>Product Name</td><td className="fw-bold text-dark">{selectedDrawerProd.name}</td></tr>
+                                            <tr><td>Short Display Name</td><td className="fw-semibold text-success">🏷️ {selectedDrawerProd.short_name || selectedDrawerProd.pos_name || (selectedDrawerProd.name?.length > 35 ? selectedDrawerProd.name.substring(0, 35) : selectedDrawerProd.name)}</td></tr>
                                             <tr><td>SKU / Code</td><td className="text-primary font-monospace fw-bold">{selectedDrawerProd.sku}</td></tr>
                                             <tr>
                                                 <td>Barcode</td>

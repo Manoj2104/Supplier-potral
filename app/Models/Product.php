@@ -110,6 +110,7 @@ class Product extends BaseModel implements HasMedia, JsonResourceful
 
     protected $fillable = [
         'name',
+        'short_name',
         'code',
         'product_code',
         'product_category_id',
@@ -168,13 +169,25 @@ class Product extends BaseModel implements HasMedia, JsonResourceful
         /** @var Media $media */
         $medias = $this->getMedia(Product::PATH);
         $images = [];
-        if (!empty($medias)) {
+        if (!empty($medias) && count($medias) > 0) {
             foreach ($medias as $key => $media) {
-                $images['imageUrls'][$key] = $media->getFullUrl();
+                $images['imageUrls'][$key] = str_replace('\\', '/', $media->getFullUrl());
                 $images['id'][$key] = $media->id;
             }
 
             return $images;
+        }
+
+        // Parent MainProduct fallback
+        if ($this->main_product_id && $this->mainProduct) {
+            $parentMedias = $this->mainProduct->getMedia(MainProduct::PATH);
+            if (!empty($parentMedias) && count($parentMedias) > 0) {
+                foreach ($parentMedias as $key => $media) {
+                    $images['imageUrls'][$key] = str_replace('\\', '/', $media->getFullUrl());
+                    $images['id'][$key] = $media->id;
+                }
+                return $images;
+            }
         }
 
         return '';
@@ -249,6 +262,7 @@ class Product extends BaseModel implements HasMedia, JsonResourceful
 
         $fields = [
             'name' => $this->name,
+            'short_name' => $this->short_name ?: ($this->mainProduct ? $this->mainProduct->short_name : mb_substr($this->name, 0, 35)),
             'code' => $this->code,
             'product_code' => $this->product_code,
             'main_product_id' => $this->main_product_id,
@@ -264,7 +278,7 @@ class Product extends BaseModel implements HasMedia, JsonResourceful
             'order_tax' => $this->order_tax,
             'tax_type' => $this->tax_type,
             'notes' => $this->notes,
-            'images' => $this->mainProduct ? $this->mainProduct->image_url : '',
+            'images' => $this->image_url ?: ($this->mainProduct ? $this->mainProduct->image_url : ''),
             'product_category_name' => $this->productCategory ? $this->productCategory->name : '',
             'brand_name' => $this->brand ? $this->brand->name : '',
             'barcode_image_url' => $this->barcode_image_url,
