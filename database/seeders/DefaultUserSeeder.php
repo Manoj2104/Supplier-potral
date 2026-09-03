@@ -32,6 +32,13 @@ class DefaultUserSeeder extends Seeder
                 'email_verified_at' => Carbon::now(),
                 'password' => Hash::make('123456'),
             ],
+            [
+                'first_name' => 'Admin',
+                'last_name' => 'Suguna',
+                'email' => 'admin@infypos.com',
+                'email_verified_at' => Carbon::now(),
+                'password' => Hash::make('123456'),
+            ],
         ];
 
         foreach ($users as $userData) {

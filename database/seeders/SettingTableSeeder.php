@@ -15,28 +15,34 @@ class SettingTableSeeder extends Seeder
      */
     public function run(): void
     {
-        Customer::Create([
-            'name' => 'walk-in-customer',
-            'email' => 'customer@infypos.com',
-            'phone' => '123456789',
-            'country' => 'india',
-            'city' => 'mumbai',
-            'address' => 'Dr Deshmukh Marg , mumbai',
-        ]);
-        Warehouse::create([
-            'name' => 'warehouse',
-            'phone' => '123456789',
-            'country' => 'india',
-            'city' => 'mumbai',
-            'email' => 'warehouse1@infypos.com',
-            'zip_code' => '12345',
-        ]);
+        Customer::firstOrCreate(
+            ['email' => 'customer@infypos.com'],
+            [
+                'name' => 'walk-in-customer',
+                'phone' => '123456789',
+                'country' => 'india',
+                'city' => 'mumbai',
+                'address' => 'Dr Deshmukh Marg , mumbai',
+            ]
+        );
+        Warehouse::firstOrCreate(
+            ['email' => 'warehouse1@infypos.com'],
+            [
+                'name' => 'warehouse',
+                'phone' => '123456789',
+                'country' => 'india',
+                'city' => 'mumbai',
+                'zip_code' => '12345',
+            ]
+        );
 
-        Currency::create([
-            'name' => 'India',
-            'code' => 'INR',
-            'symbol' => '₹',
-        ]);
+        Currency::firstOrCreate(
+            ['code' => 'INR'],
+            [
+                'name' => 'India',
+                'symbol' => '₹',
+            ]
+        );
         $logoUrl = ('images/infycare-logo.png');
 
         if (! keyExist('currency')) {
