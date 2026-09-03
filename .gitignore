@@ -17,7 +17,9 @@ webview2_pkg/
 INFY-POS-Desktop/
 runtimes/
 installer/
-storage/
+storage/*
+!storage/countries/
+!storage/countries/**
 /node_modules
 /public/hot
 /public/storage

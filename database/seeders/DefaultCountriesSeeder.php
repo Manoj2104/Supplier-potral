@@ -13,12 +13,26 @@ class DefaultCountriesSeeder extends Seeder
      */
     public function run(): void
     {
-        $countries = file_get_contents(storage_path('countries/countries.json'));
-        $countries = json_decode($countries, true)['countries'];
-        Country::insert($countries);
+        try {
+            $countriesPath = storage_path('countries/countries.json');
+            if (file_exists($countriesPath)) {
+                $content = file_get_contents($countriesPath);
+                $decoded = json_decode($content, true);
+                if (!empty($decoded['countries'])) {
+                    Country::insert($decoded['countries']);
+                }
+            }
 
-        $states = file_get_contents(storage_path('countries/states.json'));
-        $states = json_decode($states, true)['states'];
-        State::insert($states);
+            $statesPath = storage_path('countries/states.json');
+            if (file_exists($statesPath)) {
+                $content = file_get_contents($statesPath);
+                $decoded = json_decode($content, true);
+                if (!empty($decoded['states'])) {
+                    State::insert($decoded['states']);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('DefaultCountriesSeeder non-fatal notice: ' . $e->getMessage());
+        }
     }
 }

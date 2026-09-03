@@ -77,6 +77,11 @@ class AuthController extends AppBaseController
             $userPermissions = $user->getAllPermissions()->pluck('name')->toArray();
             unset($user->roles);
             unset($user->permissions);
+            try {
+                if (!\Illuminate\Support\Facades\Schema::hasColumn('personal_access_tokens', 'expires_at')) {
+                    \Illuminate\Support\Facades\DB::statement('ALTER TABLE personal_access_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP NULL');
+                }
+            } catch (\Throwable $colErr) {}
             $token = $user->createToken('token')->plainTextToken;
             $user->last_name = $user->last_name ?? '';
 
