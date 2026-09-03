@@ -277,6 +277,20 @@ class Product extends BaseModel implements HasMedia, JsonResourceful
             'warehouse' => $this->warehouse($this->id) ?? '',
             'barcode_url' => Storage::url('product_barcode/barcode-PR_' . $this->id . '.png'),
             'in_stock' => $binStock,
+            'mrp' => $this->mrp ?? round($this->product_price * 1.15, 2),
+            'supplier_name' => (function() {
+                $latestSupplier = \App\Models\PurchaseItem::where('product_id', $this->id)
+                    ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
+                    ->join('suppliers', 'suppliers.id', '=', 'purchases.supplier_id')
+                    ->select('suppliers.name')
+                    ->latest('purchases.created_at')
+                    ->first();
+                if ($latestSupplier && !empty($latestSupplier->name)) {
+                    return $latestSupplier->name;
+                }
+                $firstSup = \App\Models\Supplier::first();
+                return $firstSup ? $firstSup->name : 'Jeyachandran Textile Private Limited';
+            })(),
         ];
 
         if ($this->variationProduct) {

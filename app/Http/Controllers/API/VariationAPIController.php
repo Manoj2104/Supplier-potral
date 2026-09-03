@@ -24,13 +24,16 @@ class VariationAPIController extends AppBaseController
 
     public function index(Request $request)
     {
-        $perPage = getPageSize($request);
-        $variations = $this->variationRepository;
-        $variations = $variations->paginate($perPage);
+        $cacheKey = 'variations_api_' . md5(json_encode($request->all()));
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 30, function () use ($request) {
+            $perPage = getPageSize($request);
+            $variations = $this->variationRepository->with(['variation_types', 'variationProducts']);
+            $variations = $variations->paginate($perPage);
 
-        VariationResource::usingWithCollection();
+            VariationResource::usingWithCollection();
 
-        return new VariationCollection($variations);
+            return new VariationCollection($variations);
+        });
     }
 
     public function show(Variation $variation)

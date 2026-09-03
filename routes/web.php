@@ -1098,6 +1098,8 @@ Route::prefix('api/saas')->group(function () {
     Route::post('/backup/now', [\App\Http\Controllers\SaaSController::class, 'createBackup'])->name('saas.backup.now');
     Route::get('/backup/download-sql', [\App\Http\Controllers\SaaSController::class, 'downloadSql'])->name('saas.backup.download-sql');
     Route::get('/backup/download-zip', [\App\Http\Controllers\SaaSController::class, 'downloadZip'])->name('saas.backup.download-zip');
+    Route::post('/backup/restore', [\App\Http\Controllers\SaaSController::class, 'restoreBackup'])->name('saas.backup.restore');
+    Route::post('/backup/auto-vault', [\App\Http\Controllers\SaaSController::class, 'autoVaultSync'])->name('saas.backup.auto-vault');
 });
 
 

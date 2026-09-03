@@ -761,31 +761,125 @@ class SaaSController extends Controller
     }
 
     /**
-     * Download Real-Time Database SQL File
+     * Download Real-Time Database SQL File (Always Up-to-the-Second Fresh)
      */
     public function downloadSql()
     {
-        $sqlPath = storage_path('app/backups/latest_backup.sql');
-        if (!file_exists($sqlPath)) {
-            $result = $this->performBackup();
-            $sqlPath = $result['sql_path'];
-        }
-        $filename = 'infypos_database_' . date('Y-m-d_His') . '.sql';
+        $result = $this->performBackup();
+        $sqlPath = $result['sql_path'];
+        $filename = 'infypos_database_realtime_' . date('Y-m-d_His') . '.sql';
         return response()->download($sqlPath, $filename, ['Content-Type' => 'application/sql']);
     }
 
     /**
-     * Download Real-Time Full ZIP Backup
+     * Download Real-Time Full ZIP Backup (Always Up-to-the-Second Fresh)
      */
     public function downloadZip()
     {
-        $zipPath = storage_path('app/backups/latest_backup.zip');
-        if (!file_exists($zipPath)) {
-            $result = $this->performBackup();
-            $zipPath = $result['zip_path'];
-        }
-        $filename = 'infypos_full_backup_' . date('Y-m-d_His') . '.zip';
+        $result = $this->performBackup();
+        $zipPath = $result['zip_path'];
+        $filename = 'infypos_full_backup_realtime_' . date('Y-m-d_His') . '.zip';
         return response()->download($zipPath, $filename, ['Content-Type' => 'application/zip']);
+    }
+
+    /**
+     * Continuous Real-Time Automated Backup Vault Sync
+     */
+    public function autoVaultSync(Request $request)
+    {
+        try {
+            $result = $this->performBackup();
+            return response()->json([
+                'success'     => true,
+                'mode'        => 'continuous_realtime',
+                'status'      => 'synced',
+                'message'     => 'Real-time continuous backup vault synced.',
+                'last_backup' => $result['last_backup'],
+                'backup_size' => $result['backup_size'],
+                'timestamp'   => time(),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Restore Database from Uploaded SQL/ZIP File or Vault
+     */
+    public function restoreBackup(Request $request)
+    {
+        try {
+            set_time_limit(300);
+            ini_set('memory_limit', '512M');
+
+            $sqlContent = null;
+
+            if ($request->hasFile('backup_file')) {
+                $file = $request->file('backup_file');
+                $ext = strtolower($file->getClientOriginalExtension());
+
+                if ($ext === 'sql') {
+                    $sqlContent = file_get_contents($file->getRealPath());
+                } elseif ($ext === 'zip') {
+                    if (class_exists('ZipArchive')) {
+                        $zip = new \ZipArchive();
+                        if ($zip->open($file->getRealPath()) === TRUE) {
+                            for ($i = 0; $i < $zip->numFiles; $i++) {
+                                $filename = $zip->getNameIndex($i);
+                                if (str_ends_with(strtolower($filename), '.sql')) {
+                                    $sqlContent = $zip->getFromIndex($i);
+                                    break;
+                                }
+                            }
+                            $zip->close();
+                        }
+                    }
+                    if (!$sqlContent) {
+                        return response()->json(['success' => false, 'message' => 'No .sql file found inside the uploaded ZIP archive.'], 422);
+                    }
+                } else {
+                    return response()->json(['success' => false, 'message' => 'Invalid file format. Please upload a .sql or .zip backup file.'], 422);
+                }
+            } elseif ($request->input('source') === 'vault') {
+                $sqlPath = storage_path('app/backups/latest_backup.sql');
+                if (!file_exists($sqlPath)) {
+                    return response()->json(['success' => false, 'message' => 'No local vault backup file found. Please create a backup first or upload an SQL file.'], 404);
+                }
+                $sqlContent = file_get_contents($sqlPath);
+            } else {
+                return response()->json(['success' => false, 'message' => 'No backup file selected or source specified.'], 422);
+            }
+
+            if (empty(trim($sqlContent))) {
+                return response()->json(['success' => false, 'message' => 'The selected backup file is empty.'], 422);
+            }
+
+            // Disable foreign key checks and execute SQL dump
+            DB::unprepared("SET FOREIGN_KEY_CHECKS=0;");
+            DB::unprepared($sqlContent);
+            DB::unprepared("SET FOREIGN_KEY_CHECKS=1;");
+
+            // Update metadata
+            $backupDir = storage_path('app/backups');
+            $meta = [
+                'last_backup' => date('d M Y, h:i A') . ' (Restored)',
+                'backup_size' => $this->formatBytes(strlen($sqlContent)),
+                'updated_at'  => time(),
+            ];
+            @file_put_contents($backupDir . '/backup_meta.json', json_encode($meta));
+
+            return response()->json([
+                'success'     => true,
+                'message'     => 'Database restored successfully! All tables and records have been restored.',
+                'last_backup' => $meta['last_backup'],
+                'backup_size' => $meta['backup_size'],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Restore failed: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
