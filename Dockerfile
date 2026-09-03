@@ -34,11 +34,11 @@ COPY . /var/www/html
 # Create required storage directories and set permissions
 RUN mkdir -p /var/www/html/storage/framework/sessions \
              /var/www/html/storage/framework/views \
-             /var/www/html/storage/framework/cache \
+             /var/www/html/storage/framework/cache/data \
              /var/www/html/storage/logs \
              /var/www/html/bootstrap/cache \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+    && chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Install dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-reqs
@@ -47,4 +47,4 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-pl
 EXPOSE 80 8080 10000
 
 # Start script: Prepare Apache, fix storage permissions, run background migrations and seeding, and start Apache foreground
-CMD sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf && chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && (php artisan storage:link || true) && (php artisan config:clear || true) && ((php artisan migrate --force && php artisan db:seed --force) || true) & exec apache2-foreground
+CMD sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf && mkdir -p /var/www/html/storage/framework/cache/data /var/www/html/storage/framework/sessions /var/www/html/storage/framework/views /var/www/html/storage/logs /var/www/html/bootstrap/cache && chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && (php artisan storage:link || true) && (php artisan config:clear || true) && ((php artisan migrate --force && php artisan db:seed --force) || true) & exec apache2-foreground

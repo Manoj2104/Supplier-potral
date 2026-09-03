@@ -28,5 +28,9 @@ services:
         value: Manojnandhini@2104
       - key: DB_SSLMODE
         value: require
+      - key: CACHE_DRIVER
+        value: array
+      - key: SESSION_DRIVER
+        value: file
       - key: LOG_CHANNEL
         value: stderr
