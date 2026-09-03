@@ -1208,7 +1208,8 @@ const Product = (props) => {
                                 {drawerTab === "Overview" && (
                                     <table className="prod-drawer-meta-table">
                                         <tbody>
-                                            <tr><td>Product Name</td><td className="fw-bold text-dark">{selectedDrawerProd.name}</td></tr>
+                                            <tr><td>Product Name (Full)</td><td className="fw-bold text-dark">{selectedDrawerProd.name}</td></tr>
+                                            <tr><td>Display Name (POS)</td><td className="fw-semibold text-primary">{selectedDrawerProd.pos_name || (selectedDrawerProd.name?.length > 35 ? selectedDrawerProd.name.substring(0, 35) : selectedDrawerProd.name)}</td></tr>
                                             <tr><td>SKU / Code</td><td className="text-primary font-monospace fw-bold">{selectedDrawerProd.sku}</td></tr>
                                             <tr>
                                                 <td>Barcode</td>
