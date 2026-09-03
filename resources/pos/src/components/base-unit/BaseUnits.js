@@ -604,13 +604,14 @@ const BaseUnits = (props) => {
                                                 </tr>
                                             ) : (
                                                 paginatedBaseUnits.map((item) => {
-                                                    const name = item.attributes?.name || '';
+                                                    const name = item.attributes?.name || item.name || '';
                                                     const meta = getBaseUnitMetadata(name, item);
-                                                    const createdDate = item.attributes?.created_at
-                                                        ? moment(item.attributes.created_at).format('DD MMM YYYY')
+                                                    const createdAt = item.attributes?.created_at || item.created_at;
+                                                    const createdDate = createdAt
+                                                        ? moment(createdAt).format('DD MMM YYYY')
                                                         : '-';
-                                                    const createdTime = item.attributes?.created_at
-                                                        ? moment(item.attributes.created_at).format('h:mm A')
+                                                    const createdTime = createdAt
+                                                        ? moment(createdAt).format('h:mm A')
                                                         : '';
                                                     const isSelected = selectedRows.includes(item.id);
 
