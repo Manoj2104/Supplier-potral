@@ -92,6 +92,14 @@ return [
                 $host = $parsed['host'];
             }
 
+            // AUTO-FIX: Render PostgreSQL always listens on port 5432. If 6543 was configured, force 5432!
+            if (!empty($url) && str_contains($url, ':6543')) {
+                $url = str_replace(':6543', ':5432', $url);
+            }
+            if ((string)$port === '6543' && (str_contains((string)$host, 'render.com') || str_contains((string)$url, 'render.com'))) {
+                $port = '5432';
+            }
+
             return [
                 'driver' => 'pgsql',
                 'url' => $url,
