@@ -1,6 +1,7 @@
 <?php
 use App\Models\Setting;
 use Illuminate\Support\Facades\Auth;
+if (!function_exists('keyExist')) { function keyExist($key) { try { return Setting::where('key', $key)->exists(); } catch (\Throwable $e) { return false; } } }
 if (!function_exists('getSettingValue')) { function getSettingValue($key) { try { $setting = Setting::where('key', $key)->first(); return $setting ? $setting->value : null; } catch (\Exception $e) { return null; } } }
 if (!function_exists('getCurrencyCode')) { function getCurrencyCode() { return getSettingValue('currency') ?? 'INR'; } }
 if (!function_exists('getLogoUrl')) {

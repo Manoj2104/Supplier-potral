@@ -46,5 +46,5 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-pl
 # Expose port (Render sets $PORT dynamically)
 EXPOSE 80 8080 10000
 
-# Start script: Auto migrate DB, fix storage permissions, and start Apache
-CMD (php artisan migrate --force || true) && (php artisan storage:link || true) && (php artisan db:seed --force || true) && chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf && apache2-foreground
+# Start script: Prepare Apache, fix storage permissions, run background migrations, and start Apache foreground
+CMD sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf && chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && (php artisan storage:link || true) && (php artisan config:clear || true) && (php artisan migrate --force || true) & exec apache2-foreground

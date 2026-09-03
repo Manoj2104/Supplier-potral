@@ -80,11 +80,13 @@ return [
             $url = env('DATABASE_URL');
             $parsed = $url ? parse_url($url) : [];
 
-            $host = $parsed['host'] ?? env('DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co');
-            $port = $parsed['port'] ?? env('DB_PORT', '5432');
-            $database = isset($parsed['path']) ? ltrim($parsed['path'], '/') : env('DB_DATABASE', 'postgres');
-            $username = $parsed['user'] ?? env('DB_USERNAME', 'postgres');
-            $password = $parsed['pass'] ?? env('DB_PASSWORD', 'Manojnandhini@2104');
+            $isPgsqlDefault = env('DB_CONNECTION') === 'pgsql';
+
+            $host = $parsed['host'] ?? ($isPgsqlDefault ? env('DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co') : env('PGSQL_HOST', 'db.ejbygpiozuaomomshazl.supabase.co'));
+            $port = $parsed['port'] ?? ($isPgsqlDefault ? env('DB_PORT', '5432') : env('PGSQL_PORT', '5432'));
+            $database = isset($parsed['path']) ? ltrim($parsed['path'], '/') : ($isPgsqlDefault ? env('DB_DATABASE', 'postgres') : env('PGSQL_DATABASE', 'postgres'));
+            $username = $parsed['user'] ?? ($isPgsqlDefault ? env('DB_USERNAME', 'postgres') : env('PGSQL_USERNAME', 'postgres'));
+            $password = $parsed['pass'] ?? ($isPgsqlDefault ? env('DB_PASSWORD', 'Manojnandhini@2104') : env('PGSQL_PASSWORD', 'Manojnandhini@2104'));
 
             if (isset($parsed['host']) && !empty($parsed['host'])) {
                 $host = $parsed['host'];
