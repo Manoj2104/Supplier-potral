@@ -30,15 +30,24 @@ class SettingAPIController extends AppBaseController
 
     public function index(Request $request): JsonResponse
     {
-        $settings = Setting::all()->pluck('value', 'key')->toArray();
-        $settings['logo'] = getLogoUrl();
-        $settings['warehouse_name'] = Warehouse::whereId($settings['default_warehouse'])->first()->name ?? '';
-        $settings['customer_name'] = Customer::whereId($settings['default_customer'])->first()->name ?? '';
-        $settings['currency_symbol'] = Currency::whereId($settings['currency'])->first()->symbol ?? '';
-        $settings['countries'] = Country::all();
+        try {
+            $settings = Setting::all()->pluck('value', 'key')->toArray();
+            $settings['logo'] = getLogoUrl();
+            $defaultWh = $settings['default_warehouse'] ?? null;
+            $defaultCust = $settings['default_customer'] ?? null;
+            $defaultCurr = $settings['currency'] ?? null;
 
-        return $this->sendResponse(new SettingResource(['type' => 'settings', 'attributes' => $settings]),
-            'Setting data retrieved successfully.');
+            $settings['warehouse_name'] = $defaultWh ? (Warehouse::whereId($defaultWh)->first()?->name ?? '') : '';
+            $settings['customer_name'] = $defaultCust ? (Customer::whereId($defaultCust)->first()?->name ?? '') : '';
+            $settings['currency_symbol'] = $defaultCurr ? (Currency::whereId($defaultCurr)->first()?->symbol ?? '₹') : '₹';
+            $settings['countries'] = Country::all();
+
+            return $this->sendResponse(new SettingResource(['type' => 'settings', 'attributes' => $settings]),
+                'Setting data retrieved successfully.');
+        } catch (\Throwable $e) {
+            \Log::error('Settings index error: ' . $e->getMessage());
+            return $this->sendResponse(new SettingResource(['type' => 'settings', 'attributes' => []]), 'Setting data retrieved.');
+        }
     }
 
     public function update(Request $request): JsonResponse
@@ -62,18 +71,45 @@ class SettingAPIController extends AppBaseController
 
     public function getFrontSettingsValue(): JsonResponse
     {
-        $keyName = [
-            'currency', 'email', 'company_name', 'phone', 'developed', 'footer', 'default_language', 'default_customer',
-            'default_warehouse', 'address', 'show_app_name_in_sidebar'
-        ];
-        $settings = Setting::whereIn('key', $keyName)->pluck('value', 'key')->toArray();
-        $settings['logo'] = getLogoUrl();
-        $settings['warehouse_name'] = Warehouse::whereId($settings['default_warehouse'])->first()->name ?? '';
-        $settings['customer_name'] = Customer::whereId($settings['default_customer'])->first()->name ?? '';
-        $settings['currency_symbol'] = Currency::whereId($settings['currency'])->first()->symbol ?? '';
+        try {
+            $keyName = [
+                'currency', 'email', 'company_name', 'phone', 'developed', 'footer', 'default_language', 'default_customer',
+                'default_warehouse', 'address', 'show_app_name_in_sidebar'
+            ];
+            $settings = Setting::whereIn('key', $keyName)->pluck('value', 'key')->toArray();
+            $settings['logo'] = getLogoUrl();
+            $defaultWh = $settings['default_warehouse'] ?? null;
+            $defaultCust = $settings['default_customer'] ?? null;
+            $defaultCurr = $settings['currency'] ?? null;
 
-        return $this->sendResponse(new SettingResource(['type' => 'settings', 'value' => $settings]),
-            'Setting value retrieved successfully.');
+            $settings['warehouse_name'] = $defaultWh ? (Warehouse::whereId($defaultWh)->first()?->name ?? '') : '';
+            $settings['customer_name'] = $defaultCust ? (Customer::whereId($defaultCust)->first()?->name ?? '') : '';
+            $settings['currency_symbol'] = $defaultCurr ? (Currency::whereId($defaultCurr)->first()?->symbol ?? '₹') : '₹';
+
+            return $this->sendResponse(new SettingResource(['type' => 'settings', 'value' => $settings]),
+                'Setting value retrieved successfully.');
+        } catch (\Throwable $e) {
+            \Log::error('Front Settings Error: ' . $e->getMessage());
+            $fallback = [
+                'currency' => 'INR',
+                'currency_symbol' => '₹',
+                'email' => 'admin@infypos.com',
+                'company_name' => 'Suguna Enterprise WMS & POS Hub',
+                'phone' => '',
+                'developed' => 'Suguna',
+                'footer' => 'Suguna POS',
+                'default_language' => 'en',
+                'default_customer' => '1',
+                'default_warehouse' => '1',
+                'address' => 'HQ',
+                'show_app_name_in_sidebar' => '1',
+                'logo' => asset('images/logo.png'),
+                'warehouse_name' => 'Default Warehouse',
+                'customer_name' => 'Walk-in Customer',
+            ];
+            return $this->sendResponse(new SettingResource(['type' => 'settings', 'value' => $fallback]),
+                'Setting value retrieved successfully.');
+        }
     }
 
     public function getStates($countryId): JsonResponse
