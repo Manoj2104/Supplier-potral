@@ -262,24 +262,30 @@ class SupplierSyncService
                 ]);
                 $existingPortal = $checkPortalStmt->fetch(PDO::FETCH_ASSOC);
 
-                $rawPass = preg_replace('/[^0-9]/', '', $supplier->phone) ?: '12345678';
+                $rawPass = !empty($password) ? $password : (preg_replace('/[^0-9]/', '', $supplier->phone) ?: '12345678');
                 $hashedPass = \Illuminate\Support\Facades\Hash::make($rawPass);
 
                 if ($existingPortal) {
-                    $updatePortalStmt = $pdo->prepare('
+                    $updateSql = '
                         UPDATE supplier_portals 
                         SET supplier_code = :supplier_code,
                             phone = :phone,
                             status = \'active\',
                             kyc_status = \'verified\',
+                            ' . (!empty($password) ? 'password = :password,' : '') . '
                             updated_at = NOW()
                         WHERE id = :id
-                    ');
-                    $updatePortalStmt->execute([
+                    ';
+                    $updatePortalStmt = $pdo->prepare($updateSql);
+                    $params = [
                         ':id' => $existingPortal['id'],
                         ':supplier_code' => $supplierCode,
                         ':phone' => $supplier->phone,
-                    ]);
+                    ];
+                    if (!empty($password)) {
+                        $params[':password'] = $hashedPass;
+                    }
+                    $updatePortalStmt->execute($params);
                 } else {
                     $insertPortalStmt = $pdo->prepare('
                         INSERT INTO supplier_portals (
