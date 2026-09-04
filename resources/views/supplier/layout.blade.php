@@ -1,3 +1,25 @@
+@if(request()->header('X-SP-Instant-Nav'))
+<!DOCTYPE html>
+<html>
+<head>
+  <title>@yield('title', 'Dashboard') — INFY-POS Supplier Portal</title>
+  <div id="sp-partial-head">@yield('head')</div>
+</head>
+<body>
+  <div id="sp-real-content">
+    @if(session('success'))
+      <div class="sp-alert sp-alert-success" style="margin-bottom:16px; background:#DCFCE7; border:1px solid #86EFAC; color:#15803D; padding:10px 14px; border-radius:8px; font-weight:700;">✅ {{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+      <div class="sp-alert sp-alert-error" style="margin-bottom:16px; background:#FEE2E2; border:1px solid #FCA5A5; color:#B91C1C; padding:10px 14px; border-radius:8px; font-weight:700;">❌ {{ session('error') }}</div>
+    @endif
+    @yield('content')
+  </div>
+  <div id="sp-partial-scripts">@yield('scripts')</div>
+</body>
+</html>
+@php return; @endphp
+@endif
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -110,20 +132,6 @@
       ];
     }
   @endphp
-
-  {{-- ⚡ HTMX: Instant SPA-style navigation (no full page reload on link clicks) --}}
-  <script src="https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js"></script>
-  {{-- NProgress: Slim loading bar for visual feedback --}}
-  <link rel="stylesheet" href="https://unpkg.com/nprogress@0.2.0/nprogress.css">
-  <script src="https://unpkg.com/nprogress@0.2.0/nprogress.js"></script>
-  <script>
-    // Configure NProgress
-    NProgress.configure({ showSpinner: false, speed: 200, minimum: 0.1 });
-    // Show progress bar on HTMX request start
-    document.addEventListener('htmx:beforeRequest', () => NProgress.start());
-    document.addEventListener('htmx:afterOnLoad',   () => NProgress.done());
-    document.addEventListener('htmx:responseError', () => NProgress.done());
-  </script>
 
   <style>
   :root {
@@ -593,7 +601,7 @@
 </style>
 @yield('head')
 </head>
-<body class="sp-body" hx-boost="true">
+<body class="sp-body">
 
 <div class="sp-layout">
 
@@ -1445,33 +1453,96 @@
   };
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ⚡ SP-INSTANT-NAV: 0ms TURBO PREFETCH & SPA ROUTER
+  // ⚡ SP-INSTANT-NAV: 0ms ULTRA TURBO PERSISTENT SPA ENGINE
   // ══════════════════════════════════════════════════════════════════════════
   const SpInstantNav = (function() {
+    const CACHE_PREFIX = 'sp_snap_v1_';
     const cache = new Map();
     const prefetchQueue = new Set();
     let isNavigating = false;
+    let warmupActive = false;
+
+    // Standard Core Routes for sequential background warming
+    const coreRoutes = [
+      '/supplier/dashboard',
+      '/supplier/purchase-orders',
+      '/supplier/my-approvals',
+      '/supplier/asn',
+      '/supplier/cartons',
+      '/supplier/shipments',
+      '/supplier/invoices',
+      '/supplier/warehouse',
+      '/supplier/stock-receiving',
+      '/supplier/returns',
+      '/supplier/payments',
+      '/supplier/notifications',
+      '/supplier/profile'
+    ];
 
     function init() {
-      // 1. Save current initial page
+      // 1. Hydrate memory cache from sessionStorage
+      hydrateCacheFromStorage();
+
+      // 2. Save current initial page snapshot immediately
       saveCurrentPageToCache();
 
-      // 2. High-priority prefetch for all sidebar links
-      if (window.requestIdleCallback) {
-        requestIdleCallback(() => warmupSidebarRoutes());
-      } else {
-        setTimeout(warmupSidebarRoutes, 200);
-      }
-
-      // 3. Intercept all internal navigation clicks for 0ms swap
-      document.addEventListener('click', handleGlobalClick, true);
-
-      // 4. Instant Hover & Touchstart prefetcher
+      // 3. Fast Pointerdown Preloader (fires 100ms before click)
+      document.addEventListener('pointerdown', handlePointerDown, { passive: true });
       document.addEventListener('mouseover', handleHoverPrefetch, { passive: true });
       document.addEventListener('touchstart', handleHoverPrefetch, { passive: true });
 
+      // 4. Intercept all internal navigation clicks for 0ms swap
+      document.addEventListener('click', handleGlobalClick, true);
+
       // 5. Browser Back & Forward popstate handling
       window.addEventListener('popstate', handlePopState);
+
+      // 6. Sequential gentle warmup after main UI is fully idle
+      setTimeout(() => {
+        startSequentialWarmup();
+      }, 500);
+    }
+
+    function hydrateCacheFromStorage() {
+      try {
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith(CACHE_PREFIX)) {
+            const url = key.replace(CACHE_PREFIX, '');
+            const raw = sessionStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              cache.set(url, parsed);
+            }
+          }
+        }
+      } catch(e) {}
+    }
+
+    function getFromCache(url) {
+      if (cache.has(url)) return cache.get(url);
+      try {
+        const raw = sessionStorage.getItem(CACHE_PREFIX + url);
+        if (raw) {
+          const data = JSON.parse(raw);
+          cache.set(url, data);
+          return data;
+        }
+      } catch(e) {}
+      return null;
+    }
+
+    function setToCache(url, pageData) {
+      cache.set(url, pageData);
+      try {
+        sessionStorage.setItem(CACHE_PREFIX + url, JSON.stringify(pageData));
+      } catch(e) {
+        // If quota exceeded, clean oldest entries
+        try {
+          sessionStorage.clear();
+          sessionStorage.setItem(CACHE_PREFIX + url, JSON.stringify(pageData));
+        } catch(err) {}
+      }
     }
 
     function getNormalizedUrl(url) {
@@ -1492,24 +1563,35 @@
       const normUrl = getNormalizedUrl(window.location.href);
       if (!normUrl) return;
 
-      cache.set(normUrl, {
+      const dynamicStyles = document.getElementById('sp-dynamic-styles');
+      setToCache(normUrl, {
         title: document.title,
         html: main.innerHTML,
+        styles: dynamicStyles ? dynamicStyles.innerHTML : '',
         timestamp: Date.now()
       });
     }
 
-    function warmupSidebarRoutes() {
-      const links = document.querySelectorAll('.sp-nav-item-v2, .sp-app-tile, .sp-kpi-card, .sp-tab-item');
-      links.forEach(link => {
-        const href = link.getAttribute('href');
-        if (href && href !== '#' && !href.startsWith('javascript:')) {
-          const norm = getNormalizedUrl(href);
-          if (norm && !cache.has(norm)) {
-            prefetchUrl(norm);
-          }
+    async function startSequentialWarmup() {
+      if (warmupActive) return;
+      warmupActive = true;
+
+      // Extract all links currently visible in the DOM as well
+      const domLinks = Array.from(document.querySelectorAll('.sp-nav-item-v2, .sp-app-tile, .sp-kpi-card, .sp-tab-item'))
+        .map(el => el.getAttribute('href'))
+        .filter(Boolean);
+
+      const allRoutes = Array.from(new Set([...coreRoutes, ...domLinks]));
+
+      for (const route of allRoutes) {
+        const norm = getNormalizedUrl(route);
+        if (norm && !cache.has(norm)) {
+          await prefetchUrl(norm);
+          // 250ms spacing prevents starving server CPU / network
+          await new Promise(r => setTimeout(r, 250));
         }
-      });
+      }
+      warmupActive = false;
     }
 
     async function prefetchUrl(url) {
@@ -1527,14 +1609,9 @@
 
         if (resp.ok) {
           const htmlText = await resp.text();
-          const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-          const mainEl = doc.getElementById('sp-real-content');
-          if (mainEl) {
-            cache.set(norm, {
-              title: doc.title || document.title,
-              html: mainEl.innerHTML,
-              timestamp: Date.now()
-            });
+          const pageData = parsePageResponse(htmlText);
+          if (pageData) {
+            setToCache(norm, pageData);
           }
         }
       } catch(e) {
@@ -1543,11 +1620,51 @@
       }
     }
 
+    function parsePageResponse(htmlText) {
+      try {
+        const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+        const mainEl = doc.getElementById('sp-real-content');
+        if (!mainEl) return null;
+
+        const headEl = doc.getElementById('sp-partial-head');
+        const scriptEl = doc.getElementById('sp-partial-scripts');
+
+        return {
+          title: doc.title || document.title,
+          html: mainEl.innerHTML,
+          styles: headEl ? headEl.innerHTML : '',
+          scripts: scriptEl ? scriptEl.innerHTML : '',
+          timestamp: Date.now()
+        };
+      } catch(e) {
+        return null;
+      }
+    }
+
+    function handlePointerDown(e) {
+      const link = e.target.closest('a');
+      if (!link) return;
+      const href = link.getAttribute('href');
+      if (!href) return;
+      const norm = getNormalizedUrl(href);
+      if (norm && !cache.has(norm)) {
+        prefetchUrl(norm);
+      }
+    }
+
+    let hoverTimeout = null;
     function handleHoverPrefetch(e) {
       const link = e.target.closest('a');
       if (!link) return;
       const href = link.getAttribute('href');
-      if (href) prefetchUrl(href);
+      if (!href) return;
+      const norm = getNormalizedUrl(href);
+      if (!norm || cache.has(norm)) return;
+
+      clearTimeout(hoverTimeout);
+      hoverTimeout = setTimeout(() => {
+        prefetchUrl(norm);
+      }, 40);
     }
 
     function handleGlobalClick(e) {
@@ -1574,21 +1691,19 @@
     }
 
     async function navigateTo(url, pushState = true) {
-      if (isNavigating) return;
-      isNavigating = true;
-
       // 1. 0ms INSTANT CACHE HIT (Immediate DOM Swap!)
-      const cached = cache.get(url);
+      const cached = getFromCache(url);
       if (cached) {
         renderPage(cached, url, pushState);
-        isNavigating = false;
         // Background silent revalidation for fresh stats
         revalidateUrlInBackground(url);
         return;
       }
 
-      // 2. Cold navigation fallback with fast micro-bar
+      // 2. Cold navigation fallback with INSTANT 0ms Skeleton feedback
+      showSkeletonLoading(url);
       showProgressBar();
+
       try {
         const resp = await fetch(url, {
           headers: {
@@ -1603,38 +1718,89 @@
         }
 
         const htmlText = await resp.text();
-        const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-        const mainEl = doc.getElementById('sp-real-content');
+        const pageData = parsePageResponse(htmlText);
 
-        if (!mainEl) {
+        if (!pageData) {
           window.location.href = url;
           return;
         }
 
-        const pageData = {
-          title: doc.title || document.title,
-          html: mainEl.innerHTML,
-          timestamp: Date.now()
-        };
-
-        cache.set(url, pageData);
+        setToCache(url, pageData);
         renderPage(pageData, url, pushState);
       } catch(err) {
         console.error('InstantNav fallback:', err);
         window.location.href = url;
       } finally {
         hideProgressBar();
-        isNavigating = false;
       }
+    }
+
+    function showSkeletonLoading(url) {
+      const main = document.getElementById('sp-real-content');
+      if (!main) return;
+
+      updateSidebarActiveState(url);
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+
+      main.innerHTML = `
+        <div style="padding:10px 0; animation:spShimmerFade 0.8s infinite alternate ease-in-out;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+            <div style="height:34px; width:220px; background:#E2E8F0; border-radius:10px;"></div>
+            <div style="height:34px; width:140px; background:#E2E8F0; border-radius:10px;"></div>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; margin-bottom:24px;">
+            <div style="height:100px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+              <div style="height:14px; width:60%; background:#F1F5F9; border-radius:6px; margin-bottom:12px;"></div>
+              <div style="height:28px; width:40%; background:#E2E8F0; border-radius:8px;"></div>
+            </div>
+            <div style="height:100px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+              <div style="height:14px; width:60%; background:#F1F5F9; border-radius:6px; margin-bottom:12px;"></div>
+              <div style="height:28px; width:40%; background:#E2E8F0; border-radius:8px;"></div>
+            </div>
+            <div style="height:100px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+              <div style="height:14px; width:60%; background:#F1F5F9; border-radius:6px; margin-bottom:12px;"></div>
+              <div style="height:28px; width:40%; background:#E2E8F0; border-radius:8px;"></div>
+            </div>
+            <div style="height:100px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+              <div style="height:14px; width:60%; background:#F1F5F9; border-radius:6px; margin-bottom:12px;"></div>
+              <div style="height:28px; width:40%; background:#E2E8F0; border-radius:8px;"></div>
+            </div>
+          </div>
+          <div style="background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:24px; min-height:300px;">
+            <div style="height:20px; width:30%; background:#F1F5F9; border-radius:6px; margin-bottom:20px;"></div>
+            <div style="height:44px; width:100%; background:#F8FAFC; border-radius:8px; margin-bottom:12px;"></div>
+            <div style="height:44px; width:100%; background:#F8FAFC; border-radius:8px; margin-bottom:12px;"></div>
+            <div style="height:44px; width:100%; background:#F8FAFC; border-radius:8px; margin-bottom:12px;"></div>
+            <div style="height:44px; width:100%; background:#F8FAFC; border-radius:8px;"></div>
+          </div>
+        </div>
+        <style id="sp-shimmer-style">
+          @keyframes spShimmerFade {
+            0% { opacity: 0.6; }
+            100% { opacity: 1; }
+          }
+        </style>
+      `;
     }
 
     function renderPage(pageData, url, pushState) {
       const main = document.getElementById('sp-real-content');
       if (!main) return;
 
-      // 0ms Swap
+      // 0ms Synchronous DOM Swap
       main.innerHTML = pageData.html;
       document.title = pageData.title;
+
+      // Update Page Styles if available
+      if (pageData.styles) {
+        let styleContainer = document.getElementById('sp-dynamic-styles');
+        if (!styleContainer) {
+          styleContainer = document.createElement('div');
+          styleContainer.id = 'sp-dynamic-styles';
+          document.head.appendChild(styleContainer);
+        }
+        styleContainer.innerHTML = pageData.styles;
+      }
 
       if (pushState) {
         window.history.pushState({ url }, '', url);
@@ -1648,6 +1814,9 @@
 
       // Execute scripts contained in the new view
       executePageScripts(main);
+      if (pageData.scripts) {
+        executeRawScripts(pageData.scripts);
+      }
 
       // Trigger standard lifecycle events
       document.dispatchEvent(new Event('DOMContentLoaded'));
@@ -1680,6 +1849,19 @@
       });
     }
 
+    function executeRawScripts(htmlString) {
+      const temp = document.createElement('div');
+      temp.innerHTML = htmlString;
+      const scripts = temp.querySelectorAll('script');
+      scripts.forEach(oldScript => {
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        newScript.textContent = oldScript.textContent;
+        document.body.appendChild(newScript);
+        setTimeout(() => newScript.remove(), 100);
+      });
+    }
+
     async function revalidateUrlInBackground(url) {
       try {
         const resp = await fetch(url, {
@@ -1687,14 +1869,9 @@
         });
         if (resp.ok) {
           const htmlText = await resp.text();
-          const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-          const mainEl = doc.getElementById('sp-real-content');
-          if (mainEl) {
-            cache.set(url, {
-              title: doc.title || document.title,
-              html: mainEl.innerHTML,
-              timestamp: Date.now()
-            });
+          const pageData = parsePageResponse(htmlText);
+          if (pageData) {
+            setToCache(url, pageData);
           }
         }
       } catch(e) {}
@@ -1730,7 +1907,7 @@
       }
     }
 
-    return { init, navigateTo, prefetchUrl };
+    return { init, navigateTo, prefetchUrl, getFromCache };
   })();
 
   document.addEventListener('DOMContentLoaded', () => {

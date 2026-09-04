@@ -34,3 +34,6 @@ Homestead.yaml
 cookies.txt
 npm-debug.log
 yarn-error.log
+supplier-desktop/node_modules/
+supplier-desktop/dist/
+installer/

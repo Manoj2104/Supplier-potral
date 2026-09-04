@@ -1,0 +1,29 @@
+{
+  "name": "infy-pos-supplier-portal",
+  "version": "1.0.0",
+  "description": "INFY-POS Supplier Portal - Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.infypos.supplierportal",
+    "productName": "Supplier-Portal",
+    "copyright": "Copyright 2026 INFY-POS Technologies",
+    "win": {
+      "target": [{"target": "portable", "arch": ["x64"]}],
+      "icon": "assets/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Supplier-Portal.exe"
+    },
+    "files": ["main.js", "preload.js", "assets/**", "node_modules/**"]
+  },
+  "author": "INFY-POS Technologies",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  }
+}
