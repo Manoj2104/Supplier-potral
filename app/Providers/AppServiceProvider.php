@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use App\Models\Purchase;
+use App\Observers\PurchaseObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -31,6 +33,13 @@ class AppServiceProvider extends ServiceProvider
         if ($isCloudOrRender) {
             \Illuminate\Support\Facades\URL::forceScheme('https');
             config(['database.default' => 'pgsql']);
+        }
+
+        // ── Real-time Supabase Sync ──────────────────────────────────────────
+        // Only register on LOCAL POS (not on Render — Render reads from Supabase, doesn't write)
+        // When admin creates/updates a PO locally → instantly pushed to Supabase → supplier sees it
+        if (!$isCloudOrRender && env('SUPABASE_DB_PASSWORD')) {
+            Purchase::observe(PurchaseObserver::class);
         }
     }
 }
