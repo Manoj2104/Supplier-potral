@@ -25,6 +25,15 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-av
 
 WORKDIR /var/www/html
 
+# Set default cloud environment variables
+ENV DB_CONNECTION=pgsql
+ENV PORTAL_MODE=supplier
+ENV DB_HOST=db.ejbygpiozuaomomshazl.supabase.co
+ENV DB_PORT=5432
+ENV DB_DATABASE=postgres
+ENV DB_USERNAME=postgres
+ENV DB_SSLMODE=require
+
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 

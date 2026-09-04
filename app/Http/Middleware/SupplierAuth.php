@@ -10,15 +10,10 @@ class SupplierAuth
     public function handle(Request $request, Closure $next)
     {
         if (!session()->has('supplier_portal_id')) {
-            $defaultPortal = \App\Models\SupplierPortal::with('supplier')->first();
-            if ($defaultPortal) {
-                session()->put('supplier_portal_id', $defaultPortal->id);
-            } else {
-                if ($request->expectsJson()) {
-                    return response()->json(['message' => 'Unauthenticated.'], 401);
-                }
-                return redirect()->route('supplier.login')->with('error', 'Please login to access the supplier portal.');
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
             }
+            return redirect()->route('supplier.login')->with('error', 'Please login to access the supplier portal.');
         }
 
         // Refresh supplier data into request

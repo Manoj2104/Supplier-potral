@@ -15,7 +15,17 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'mysql'),
+    'default' => env('DB_CONNECTION', (
+        (
+            isset($_SERVER['RENDER']) ||
+            env('RENDER') ||
+            env('PORTAL_MODE') === 'supplier' ||
+            (isset($_SERVER['HTTP_HOST']) && str_contains($_SERVER['HTTP_HOST'], 'render.com')) ||
+            (isset($_SERVER['SERVER_NAME']) && str_contains($_SERVER['SERVER_NAME'], 'render.com'))
+        )
+        ? 'pgsql'
+        : 'mysql'
+    )),
 
     /*
     |--------------------------------------------------------------------------
