@@ -783,7 +783,7 @@ const ProductForm = (props) => {
                     short_name: extractedShortName || prev.short_name || '',
                     pos_name: extractedShortName || prev.pos_name || '',
                     product_type: detectedType,
-                    barcode_symbol: '1',
+                    barcode_symbol: (barcodeVal && barcodeVal.length === 13) ? '5' : '1',
                     sku: data.sku || smartSku,
                     code: barcodeVal,
                     product_price: data.price ? String(data.price) : (prev.product_price || '0.00'),
@@ -1061,7 +1061,7 @@ const ProductForm = (props) => {
 
     const handleGenerateBarcode = () => {
         const generatedBarcode = generateBarcode();
-        setProductValue(prev => ({ ...prev, code: generatedBarcode, barcode_symbol: '3' }));
+        setProductValue(prev => ({ ...prev, code: generatedBarcode, barcode_symbol: '5' }));
         if (errors.code) setErrors(prev => ({ ...prev, code: null }));
         addToast({ text: `✓ GS1 Standard EAN-13 generated: ${generatedBarcode}`, type: 'success' });
     };
@@ -1290,7 +1290,16 @@ const ProductForm = (props) => {
             formData.append('order_tax', productValue.order_tax || 0);
             formData.append('tax_type', productValue.tax_type || '1');
             formData.append('hsn_code', productValue.hsn_code || '');
-            formData.append('barcode_symbol', productValue.barcode_symbol || '1');
+            let finalBarcodeSymbol = productValue.barcode_symbol || '1';
+            const rawCode = (productValue.code || '').trim();
+            if (rawCode.length === 13 && (finalBarcodeSymbol === '1' || finalBarcodeSymbol === '3')) {
+                finalBarcodeSymbol = '5'; // EAN-13
+            } else if (rawCode.length === 8 && finalBarcodeSymbol === '1') {
+                finalBarcodeSymbol = '3'; // EAN-8
+            } else if (rawCode.length === 12 && finalBarcodeSymbol === '1') {
+                finalBarcodeSymbol = '4'; // UPC-A
+            }
+            formData.append('barcode_symbol', finalBarcodeSymbol);
             formData.append('brand_id', validBrandId);
             formData.append('product_category_id', validCategoryId);
 
@@ -2040,8 +2049,9 @@ const ProductForm = (props) => {
                                             >
                                                 <option value="1">CODE128 (Standard)</option>
                                                 <option value="2">CODE39</option>
-                                                <option value="3">EAN-13 (GS1 GTIN)</option>
+                                                <option value="3">EAN-8</option>
                                                 <option value="4">UPC-A</option>
+                                                <option value="5">EAN-13 (GS1 GTIN)</option>
                                             </select>
                                         </div>
 

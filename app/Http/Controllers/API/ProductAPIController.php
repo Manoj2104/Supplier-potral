@@ -94,12 +94,22 @@ class ProductAPIController extends AppBaseController
             }
         }
 
-        if ($input['barcode_symbol'] == Product::EAN8 && strlen($input['code']) != 7) {
-            return $this->sendError('Please enter 7 digit code');
-        }
-
-        if ($input['barcode_symbol'] == Product::UPC && strlen($input['code']) != 11) {
-            return $this->sendError(' Please enter 11 digit code');
+        if (!empty($input['code'])) {
+            $codeClean = trim($input['code']);
+            $codeLen = strlen($codeClean);
+            if (isset($input['barcode_symbol']) && $input['barcode_symbol'] == Product::EAN8) {
+                if ($codeLen === 13) {
+                    $input['barcode_symbol'] = Product::EAN13;
+                } elseif ($codeLen !== 7 && $codeLen !== 8) {
+                    return $this->sendError('Please enter 7 or 8 digit code for EAN-8');
+                }
+            } elseif (isset($input['barcode_symbol']) && $input['barcode_symbol'] == Product::UPC) {
+                if ($codeLen === 13) {
+                    $input['barcode_symbol'] = Product::EAN13;
+                } elseif ($codeLen !== 11 && $codeLen !== 12) {
+                    return $this->sendError('Please enter 11 or 12 digit code for UPC');
+                }
+            }
         }
 
         $product = $this->productRepository->storeProduct($input);
