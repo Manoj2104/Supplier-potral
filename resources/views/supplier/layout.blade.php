@@ -29,11 +29,11 @@
     $companyName = $supplierInfo->name ?? 'Jeyachandran Textile Private Limited';
     // Fast SQL Aggregates for layout badges & spotlight
     $poStats = \App\Models\Purchase::where('supplier_id', $supId)
-        ->selectRaw('COUNT(*) as total_pos, COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as pending_pos')
+        ->selectRaw("COUNT(*) as total_pos, COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_pos")
         ->first();
         
     $asnStats = \App\Models\SupplierAsn::where('supplier_id', $supId)
-        ->selectRaw('COUNT(*) as total_asns, COUNT(CASE WHEN status IN ("dispatched", "in_transit", "out_for_delivery", "arrived", "receiving", "putaway_completed") THEN 1 END) as dispatched, COUNT(CASE WHEN invoice_number IS NOT NULL AND invoice_number != "" THEN 1 END) as invoices')
+        ->selectRaw("COUNT(*) as total_asns, COUNT(CASE WHEN status IN ('dispatched', 'in_transit', 'out_for_delivery', 'arrived', 'receiving', 'putaway_completed') THEN 1 END) as dispatched, COUNT(CASE WHEN invoice_number IS NOT NULL AND invoice_number != '' THEN 1 END) as invoices")
         ->first();
 
     $livePosCount = (int)($poStats->total_pos ?? 0);
