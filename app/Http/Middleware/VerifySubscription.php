@@ -25,6 +25,11 @@ class VerifySubscription
 
     public function handle(Request $request, Closure $next)
     {
+        // On cloud/Render or for any supplier portal request, bypass local POS hardware license check
+        if (str_contains($request->getHost(), 'onrender.com') || $request->is('supplier*') || $request->is('api/supplier*') || env('PORTAL_MODE') === 'supplier') {
+            return $next($request);
+        }
+
         // Skip middleware for exempt/installer routes
         foreach ($this->exempt as $pattern) {
             if ($request->is($pattern)) {

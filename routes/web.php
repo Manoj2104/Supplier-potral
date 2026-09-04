@@ -22,6 +22,23 @@ Route::get('/login', function () {
     return redirect('/#/login');
 });
 
+// Top-level aliases for direct navigation (e.g. /dashboard -> /supplier/dashboard)
+Route::get('/dashboard', fn() => redirect()->route('supplier.dashboard'));
+Route::get('/my-approvals', fn() => redirect()->route('supplier.my-approvals'));
+Route::get('/purchase-orders', fn() => redirect()->route('supplier.purchase-orders.index'));
+Route::get('/purchase-orders/{id}', fn($id) => redirect()->route('supplier.purchase-orders.show', $id));
+Route::get('/asn', fn() => redirect()->route('supplier.asn.index'));
+Route::get('/shipments', fn() => redirect()->route('supplier.shipments'));
+Route::get('/cartons', fn() => redirect()->route('supplier.cartons.index'));
+Route::get('/warehouse', fn() => redirect()->route('supplier.warehouse'));
+Route::get('/stock-receiving', fn() => redirect()->route('supplier.stock-receiving'));
+Route::get('/invoices', fn() => redirect()->route('supplier.invoices'));
+Route::get('/payments', fn() => redirect()->route('supplier.payments'));
+Route::get('/returns', fn() => redirect()->route('supplier.returns'));
+Route::get('/profile', fn() => redirect()->route('supplier.profile'));
+Route::get('/notifications', fn() => redirect()->route('supplier.notifications'));
+Route::get('/forgot-password', fn() => redirect()->route('supplier.forgot-password'));
+
 Route::get('/auto-setup', function () {
     try {
         \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
