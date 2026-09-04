@@ -27,24 +27,30 @@
         'country' => 'India',
     ]);
     $companyName = $supplierInfo->name ?? 'Jeyachandran Textile Private Limited';
-    // Fast SQL Aggregates for layout badges & spotlight
-    $poStats = \App\Models\Purchase::where('supplier_id', $supId)
-        ->selectRaw("COUNT(*) as total_pos, COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_pos")
-        ->first();
-        
-    $asnStats = \App\Models\SupplierAsn::where('supplier_id', $supId)
-        ->selectRaw("COUNT(*) as total_asns, COUNT(CASE WHEN status IN ('dispatched', 'in_transit', 'out_for_delivery', 'arrived', 'receiving', 'putaway_completed') THEN 1 END) as dispatched, COUNT(CASE WHEN invoice_number IS NOT NULL AND invoice_number != '' THEN 1 END) as invoices")
-        ->first();
+    // Fast SQL Aggregates for layout badges & spotlight — cached 30s to eliminate per-page Supabase round-trips
+    $layoutCache = \Illuminate\Support\Facades\Cache::remember("layout_counts_{$supId}", 30, function () use ($supId) {
+        $poStats = \App\Models\Purchase::where('supplier_id', $supId)
+            ->selectRaw("COUNT(*) as total_pos, COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_pos")
+            ->first();
+        $asnStats = \App\Models\SupplierAsn::where('supplier_id', $supId)
+            ->selectRaw("COUNT(*) as total_asns, COUNT(CASE WHEN status IN ('dispatched', 'in_transit', 'out_for_delivery', 'arrived', 'receiving', 'putaway_completed') THEN 1 END) as dispatched, COUNT(CASE WHEN invoice_number IS NOT NULL AND invoice_number != '' THEN 1 END) as invoices")
+            ->first();
+        $recentNotifs = \App\Models\SupplierNotification::where('supplier_id', $supId)->latest('id')->limit(5)->get();
+        $liveNotifs   = \App\Models\SupplierNotification::where('supplier_id', $supId)->where('is_read', false)->count();
+        $spotlightPos = \App\Models\Purchase::where('supplier_id', $supId)->latest('id')->limit(6)->get(['id', 'reference_code', 'grand_total', 'status']);
+        return compact('poStats', 'asnStats', 'recentNotifs', 'liveNotifs', 'spotlightPos');
+    });
 
-    $livePosCount = (int)($poStats->total_pos ?? 0);
-    $livePendingPos = (int)($poStats->pending_pos ?? 0);
-    $liveAsnsCount = (int)($asnStats->total_asns ?? 0);
-    $liveDispatchedCount = (int)($asnStats->dispatched ?? 0);
-    $liveInvoicesCount = (int)($asnStats->invoices ?? 0);
+    $livePosCount       = (int)($layoutCache['poStats']->total_pos ?? 0);
+    $livePendingPos     = (int)($layoutCache['poStats']->pending_pos ?? 0);
+    $liveAsnsCount      = (int)($layoutCache['asnStats']->total_asns ?? 0);
+    $liveDispatchedCount= (int)($layoutCache['asnStats']->dispatched ?? 0);
+    $liveInvoicesCount  = (int)($layoutCache['asnStats']->invoices ?? 0);
     if ($liveInvoicesCount === 0) { $liveInvoicesCount = $liveAsnsCount; }
+    $recentNotifs = $layoutCache['recentNotifs'];
+    $liveNotifs   = $layoutCache['liveNotifs'];
+    $spotlightPos = $layoutCache['spotlightPos'];
 
-    $recentNotifs = \App\Models\SupplierNotification::where('supplier_id', $supId)->latest('id')->limit(5)->get();
-    $liveNotifs = \App\Models\SupplierNotification::where('supplier_id', $supId)->where('is_read', false)->count();
 
     // Check if supplier is currently using the default password
     $isDefaultPassword = false;
@@ -78,7 +84,7 @@
       ['category' => 'Navigation', 'title' => 'My Profile & Company Settings', 'subtitle' => 'GSTIN, PAN, bank accounts & security', 'url' => route('supplier.profile'), 'icon' => 'bi-person'],
     ];
 
-    $spotlightPos = \App\Models\Purchase::where('supplier_id', $supId)->latest('id')->limit(6)->get(['id', 'reference_code', 'grand_total', 'status']);
+    // Use cached spotlight data — $spotlightPos already in $layoutCache
     foreach($spotlightPos as $po) {
       $poCode = $po->reference_code ?: ('PO-2026-' . str_pad($po->id, 6, '0', STR_PAD_LEFT));
       $globalSearchData[] = [
@@ -90,7 +96,9 @@
       ];
     }
 
-    $spotlightAsns = \App\Models\SupplierAsn::where('supplier_id', $supId)->latest('id')->limit(6)->get(['id', 'asn_number', 'status', 'driver_name']);
+    $spotlightAsns = \Illuminate\Support\Facades\Cache::remember("spotlight_asns_{$supId}", 30, fn() =>
+        \App\Models\SupplierAsn::where('supplier_id', $supId)->latest('id')->limit(6)->get(['id', 'asn_number', 'status', 'driver_name'])
+    );
     foreach($spotlightAsns as $asn) {
       $asnCode = $asn->asn_number ?: ('ASN-2026-' . str_pad($asn->id, 5, '0', STR_PAD_LEFT));
       $globalSearchData[] = [
@@ -102,6 +110,20 @@
       ];
     }
   @endphp
+
+  {{-- ⚡ HTMX: Instant SPA-style navigation (no full page reload on link clicks) --}}
+  <script src="https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js"></script>
+  {{-- NProgress: Slim loading bar for visual feedback --}}
+  <link rel="stylesheet" href="https://unpkg.com/nprogress@0.2.0/nprogress.css">
+  <script src="https://unpkg.com/nprogress@0.2.0/nprogress.js"></script>
+  <script>
+    // Configure NProgress
+    NProgress.configure({ showSpinner: false, speed: 200, minimum: 0.1 });
+    // Show progress bar on HTMX request start
+    document.addEventListener('htmx:beforeRequest', () => NProgress.start());
+    document.addEventListener('htmx:afterOnLoad',   () => NProgress.done());
+    document.addEventListener('htmx:responseError', () => NProgress.done());
+  </script>
 
   <style>
   :root {
@@ -571,7 +593,7 @@
 </style>
 @yield('head')
 </head>
-<body class="sp-body">
+<body class="sp-body" hx-boost="true">
 
 <div class="sp-layout">
 
