@@ -108,6 +108,64 @@ Route::get('/auto-setup', function () {
 });
 Route::get('/setup', fn() => redirect('/auto-setup'));
 
+Route::get('/supplier-debug', function () {
+    $conn = config('database.default');
+    
+    // Ensure default demo/admin supplier and portal exist on this database
+    $supplier = \App\Models\Supplier::firstOrCreate(
+        ['email' => 'manoj2104s@gmail.com'],
+        [
+            'name' => 'Jeyachandran Textile Private Limited',
+            'phone' => '+918610006544',
+            'address' => 'No. 12, Mill Road, Coimbatore, Tamil Nadu, 641001',
+        ]
+    );
+
+    $portal = \App\Models\SupplierPortal::firstOrCreate(
+        ['supplier_id' => $supplier->id],
+        [
+            'username' => 'manoj2104s@gmail.com',
+            'supplier_code' => 'SUP-00001',
+            'phone' => '+918610006544',
+            'password' => \Illuminate\Support\Facades\Hash::make('8610006544'),
+            'status' => 'active',
+            'kyc_status' => 'verified',
+        ]
+    );
+
+    // Also Apex Logistics
+    $supplier2 = \App\Models\Supplier::firstOrCreate(
+        ['email' => 'apex.vendor@sugunapos.com'],
+        [
+            'name' => 'Apex Logistics Corp',
+            'phone' => '9840123456',
+            'address' => 'Mount Road, Chennai',
+        ]
+    );
+
+    $portal2 = \App\Models\SupplierPortal::firstOrCreate(
+        ['supplier_id' => $supplier2->id],
+        [
+            'username' => 'apex.vendor@sugunapos.com',
+            'supplier_code' => 'SUP-00002',
+            'phone' => '9840123456',
+            'password' => \Illuminate\Support\Facades\Hash::make('9840123456'),
+            'status' => 'active',
+            'kyc_status' => 'verified',
+        ]
+    );
+
+    return response()->json([
+        'db_connection' => $conn,
+        'db_host' => config("database.connections.{$conn}.host"),
+        'db_database' => config("database.connections.{$conn}.database"),
+        'suppliers_count' => \App\Models\Supplier::count(),
+        'portals_count' => \App\Models\SupplierPortal::count(),
+        'suppliers' => \App\Models\Supplier::select('id', 'name', 'email', 'phone')->get(),
+        'portals' => \App\Models\SupplierPortal::select('id', 'supplier_id', 'username', 'supplier_code', 'phone')->get(),
+    ]);
+});
+
 
 $handleAccept = function ($id) {
     $purchase = \App\Models\Purchase::find($id);
