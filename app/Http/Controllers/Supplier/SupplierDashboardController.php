@@ -155,11 +155,13 @@ class SupplierDashboardController extends Controller
             ->where('is_read', false)
             ->count();
 
-        // ── 8. Monthly Aggregated Chart Data (Single Grouped Query) ────
+        // ── 8. Monthly Aggregated Chart Data (Cross-DB Compatible Query) ────
+        $isPgsql = DB::getDriverName() === 'pgsql';
+        $monthExpr = $isPgsql ? 'EXTRACT(MONTH FROM date)' : 'MONTH(date)';
         $monthlySums = Purchase::where('supplier_id', $supplierId)
             ->whereYear('date', date('Y'))
-            ->selectRaw('MONTH(date) as month_num, SUM(grand_total) as sum_total')
-            ->groupBy(DB::raw('MONTH(date)'))
+            ->selectRaw("{$monthExpr} as month_num, SUM(grand_total) as sum_total")
+            ->groupBy(DB::raw($monthExpr))
             ->pluck('sum_total', 'month_num')
             ->toArray();
 
@@ -199,7 +201,15 @@ class SupplierDashboardController extends Controller
      */
     public function index(Request $request)
     {
-        $portal     = $request->supplier_portal;
+        $portal = $request->supplier_portal;
+        if (!$portal) {
+            $portal = \App\Models\SupplierPortal::with('supplier')->first();
+            if ($portal) {
+                session()->put('supplier_portal_id', $portal->id);
+                view()->share('supplierPortal', $portal);
+                view()->share('supplierInfo', $portal->supplier);
+            }
+        }
         $supplierId = $portal ? $portal->supplier_id : 1;
         $supplierInfo = $portal && $portal->supplier ? $portal->supplier : (Supplier::find($supplierId) ?? (object)['name' => 'Jeyachandran Textile Private Limited']);
 

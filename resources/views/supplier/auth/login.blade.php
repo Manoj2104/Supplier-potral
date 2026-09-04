@@ -603,7 +603,7 @@
               type="email"
               id="loginEmail"
               name="email"
-              value="{{ old('email', old('login_id', '')) }}"
+              value="{{ old('email', old('login_id', 'manoj2104s@gmail.com')) }}"
               placeholder="e.g. supplier@company.com"
               autocomplete="email"
               autofocus
@@ -630,7 +630,7 @@
               type="password"
               id="loginPassword"
               name="password"
-              value="{{ old('password', '') }}"
+              value="{{ old('password', '8610006544') }}"
               placeholder="Enter your registered mobile number"
               autocomplete="current-password"
               required
