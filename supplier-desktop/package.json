@@ -5,18 +5,15 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win --x64"
+    "build": "electron-builder --dir"
   },
   "build": {
     "appId": "com.infypos.supplierportal",
     "productName": "Supplier-Portal",
     "copyright": "Copyright 2026 INFY-POS Technologies",
     "win": {
-      "target": [{"target": "portable", "arch": ["x64"]}],
+      "target": "dir",
       "icon": "assets/icon.ico"
-    },
-    "portable": {
-      "artifactName": "Supplier-Portal.exe"
     },
     "files": ["main.js", "preload.js", "assets/**", "node_modules/**"]
   },

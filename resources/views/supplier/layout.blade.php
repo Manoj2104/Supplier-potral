@@ -1271,7 +1271,6 @@
         window.infyBroadcastPoChange();
       }
     });
-  });
 
   // ── Change Password Center Modal Controls ───────────────────────────────────
   function openChangePasswordModal() {

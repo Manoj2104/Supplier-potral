@@ -19,7 +19,7 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
     },
-    show: false,
+    show: true, // Visible immediately
     backgroundColor: "#1a7c4f",
     autoHideMenuBar: true,
   });
@@ -27,7 +27,6 @@ function createWindow() {
   // Remove default menu bar
   Menu.setApplicationMenu(null);
 
-  // Show loading splash until page is ready
   mainWindow.loadURL(PORTAL_URL);
 
   mainWindow.once("ready-to-show", () => {
@@ -36,7 +35,7 @@ function createWindow() {
   });
 
   // Keep app title
-  mainWindow.webContents.on("did-navigate", (_, url) => {
+  mainWindow.webContents.on("did-navigate", () => {
     mainWindow.setTitle("INFY-POS Supplier Portal");
   });
 
@@ -55,7 +54,7 @@ function createTray() {
   const iconPath = path.join(__dirname, "assets", "icon.ico");
   tray = new Tray(nativeImage.createFromPath(iconPath));
   const contextMenu = Menu.buildFromTemplate([
-    { label: "Open Supplier Portal", click: () => { if (mainWindow) mainWindow.show(); else createWindow(); } },
+    { label: "Open Supplier Portal", click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } else { createWindow(); } } },
     { label: "Dashboard", click: () => mainWindow && mainWindow.loadURL("https://supplier-potral.onrender.com/supplier/dashboard") },
     { type: "separator" },
     { label: "Quit", click: () => { app.isQuiting = true; app.quit(); } },
@@ -76,7 +75,6 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
-    // Keep running in tray on Windows
     if (!app.isQuiting) return;
     app.quit();
   }
@@ -85,3 +83,4 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   app.isQuiting = true;
 });
+

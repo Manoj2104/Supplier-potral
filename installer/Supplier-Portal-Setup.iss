@@ -1,4 +1,4 @@
-﻿; INFY-POS Supplier Portal Installer - Inno Setup 7
+; INFY-POS Supplier Portal Installer - Inno Setup 7
 
 #define AppName      "INFY-POS Supplier Portal"
 #define AppVersion   "1.0.0"
@@ -31,6 +31,9 @@ DisableDirPage     = no
 DisableProgramGroupPage = yes
 Uninstallable      = yes
 UninstallDisplayName = {#AppName}
+CloseApplications  = force
+CloseApplicationsFilter = *Supplier-Portal*
+RestartApplications = no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -60,6 +63,22 @@ Filename: "{app}\{#AppExeName}"; Description: "Launch INFY-POS Supplier Portal";
 Filename: "taskkill.exe"; Parameters: "/f /im Supplier-Portal.exe"; Flags: runhidden skipifdoesntexist
 
 [Code]
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/f /im Supplier-Portal.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := True;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/f /im Supplier-Portal.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := '';
+end;
+
 procedure InitializeWizard;
 begin
   WizardForm.WelcomeLabel2.Caption :=
