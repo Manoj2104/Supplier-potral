@@ -8,6 +8,15 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
+// ─── Keep-Alive Ping ────────────────────────────────────────────────────────
+// Called by UptimeRobot/cron-job.org every 5–10 min to prevent Render cold start
+Route::get('/ping', function () {
+    return response()->json([
+        'status' => 'ok',
+        'ts'     => time(),
+    ], 200, ['Cache-Control' => 'no-cache, no-store']);
+});
+
 Route::get('/', function () {
     if (str_contains(request()->getHost(), 'onrender.com') || str_contains(request()->getHost(), 'supplier') || env('PORTAL_MODE') === 'supplier' || env('APP_ENV') === 'production') {
         return redirect()->route('supplier.dashboard');
