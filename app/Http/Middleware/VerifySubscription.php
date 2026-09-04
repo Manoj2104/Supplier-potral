@@ -18,7 +18,7 @@ class VerifySubscription
         'login', 'logout', 'forgot-password', 'reset-password',
         'api/login', 'api/logout', 'api/forgot-password', 'api/reset-password',
         'api/m1/login', 'api/m1/logout', 'api/m1/forgot-password', 'api/m1/reset-password',
-        'install', 'install/*', 'saas/*', 'landing',
+        'install', 'install/*', 'saas/*', 'landing', 'supplier', 'supplier/*', 'supplier-action/*',
         'api/config', 'api/front-setting', 'api/permissions', 'api/settings', 'api/languages', 'api/languages/*', 'api/currencies', 'api/currencies/*', 'api/report-product-quantity',
         'api/saas/*', 'api/payment/*', 'api/saas-admin/*', 'api/saas-admin', 'api/license/*', 'api/subscription*',
     ];
@@ -32,8 +32,29 @@ class VerifySubscription
             }
         }
 
+        $isCloud = env('APP_ENV') === 'production' || str_contains($request->getHost(), 'render.com');
+
         try {
             DB::connection()->getPdo();
+
+            // In cloud deployments, auto-ensure company exists and allow all traffic
+            if ($isCloud) {
+                if (\Illuminate\Support\Facades\Schema::hasTable('companies')) {
+                    $company = Company::first();
+                    if (!$company) {
+                        try {
+                            Company::create([
+                                'name' => 'Suguna Enterprise WMS & POS Hub',
+                                'email' => 'admin@infypos.com',
+                                'phone' => '1234567890',
+                                'status' => 1,
+                            ]);
+                        } catch (\Throwable $ce) {}
+                    }
+                }
+                return $next($request);
+            }
+
             if (!\Illuminate\Support\Facades\Schema::hasTable('users') || \App\Models\User::count() === 0) {
                 if ($request->is('saas-admin*') || $request->is('api/saas-admin*') || $request->is('api/license*')) {
                     return $next($request);
@@ -48,6 +69,9 @@ class VerifySubscription
                 return redirect('/install');
             }
         } catch (\Throwable $e) {
+            if ($isCloud) {
+                return $next($request);
+            }
             if ($request->is('saas-admin*') || $request->is('api/saas-admin*') || $request->is('api/license*')) {
                 return $next($request);
             }

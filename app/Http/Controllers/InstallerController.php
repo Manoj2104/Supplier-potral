@@ -23,6 +23,10 @@ class InstallerController extends Controller
     // ──────────────────────────────────────────────────
     public function index(Request $request)
     {
+        if (env('APP_ENV') === 'production' || str_contains($request->getHost(), 'render.com')) {
+            return redirect('/#/app/dashboard');
+        }
+
         try {
             if (\Illuminate\Support\Facades\Schema::hasTable('users') 
                 && \Illuminate\Support\Facades\Schema::hasTable('companies') 

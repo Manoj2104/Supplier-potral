@@ -1002,8 +1002,10 @@ Route::get('/api/inventory/master-stock', function() {
 // INFY-POS ENTERPRISE SaaS — PHASE 1 ROUTES
 // =======================================================================
 
-// Web Installer Wizard
-Route::get('/install', [\App\Http\Controllers\InstallerController::class, 'index'])->name('installer.index');
+// Web Installer Wizard (Redirect to Dashboard on Web)
+Route::get('/install', function () {
+    return redirect('/#/app/dashboard');
+})->name('installer.index');
 Route::post('/install/test-db', [\App\Http\Controllers\InstallerController::class, 'testDbConnection'])->name('installer.test-db');
 Route::post('/install/test-server', [\App\Http\Controllers\InstallerController::class, 'testServerConnection'])->name('installer.test-server');
 Route::get('/install/detect-printers', [\App\Http\Controllers\InstallerController::class, 'detectPrinters'])->name('installer.detect-printers');
