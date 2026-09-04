@@ -64,7 +64,7 @@ RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
 # Expose port (Render sets $PORT dynamically)
 EXPOSE 80 8080 10000
 
-# Optimized start: cache config/routes/views at boot for instant page loads
+# Start Apache IMMEDIATELY, run all artisan warmup in background (non-blocking)
 CMD sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf \
     && mkdir -p /var/www/html/storage/framework/cache/data \
               /var/www/html/storage/framework/sessions \
@@ -74,9 +74,11 @@ CMD sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-avail
               /tmp/views \
     && chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache /tmp/views \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
-    && (php artisan storage:link || true) \
-    && (php artisan config:cache || true) \
-    && (php artisan route:cache  || true) \
-    && (php artisan view:cache   || true) \
-    && ((php artisan migrate --force && php artisan db:seed --force) || true) & \
+    && ( \
+        php artisan storage:link 2>/dev/null; \
+        php artisan config:cache 2>/dev/null; \
+        php artisan route:cache  2>/dev/null; \
+        php artisan view:cache   2>/dev/null; \
+        php artisan migrate --force 2>/dev/null; \
+    ) & \
     exec apache2-foreground

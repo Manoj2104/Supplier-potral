@@ -14,34 +14,36 @@ class SupplierAsnController extends Controller
 {
     private function getSidebarCounts(int $supplierId): array
     {
-        $poAggregates = Purchase::where('supplier_id', $supplierId)
-            ->selectRaw("
-                COUNT(*) as total_pos,
-                COALESCE(SUM(grand_total), 0) as total_value,
-                COALESCE(SUM(paid_amount), 0) as paid_amount,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_pos
-            ")
-            ->first();
+        return \Illuminate\Support\Facades\Cache::remember("sidebar_counts_{$supplierId}", 30, function () use ($supplierId) {
+            $poAggregates = Purchase::where('supplier_id', $supplierId)
+                ->selectRaw("
+                    COUNT(*) as total_pos,
+                    COALESCE(SUM(grand_total), 0) as total_value,
+                    COALESCE(SUM(paid_amount), 0) as paid_amount,
+                    COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_pos
+                ")
+                ->first();
 
-        $asnAggregates = SupplierAsn::where('supplier_id', $supplierId)
-            ->selectRaw("
-                COUNT(*) as total_asns,
-                COUNT(CASE WHEN status IN ('dispatched', 'in_transit', 'out_for_delivery', 'arrived', 'receiving', 'putaway_completed') THEN 1 END) as dispatched_asns
-            ")
-            ->first();
+            $asnAggregates = SupplierAsn::where('supplier_id', $supplierId)
+                ->selectRaw("
+                    COUNT(*) as total_asns,
+                    COUNT(CASE WHEN status IN ('dispatched', 'in_transit', 'out_for_delivery', 'arrived', 'receiving', 'putaway_completed') THEN 1 END) as dispatched_asns
+                ")
+                ->first();
 
-        $totalReturns = PurchaseReturn::where('supplier_id', $supplierId)->count();
-        $totalVal = (float)($poAggregates->total_value ?? 0);
-        $paidAmt  = (float)($poAggregates->paid_amount ?? 0);
+            $totalReturns = PurchaseReturn::where('supplier_id', $supplierId)->count();
+            $totalVal = (float)($poAggregates->total_value ?? 0);
+            $paidAmt  = (float)($poAggregates->paid_amount ?? 0);
 
-        return [
-            'total_pos'       => (int)($poAggregates->total_pos ?? 0),
-            'pending_pos'     => (int)($poAggregates->pending_pos ?? 0),
-            'total_asns'      => (int)($asnAggregates->total_asns ?? 0),
-            'dispatched_asns' => (int)($asnAggregates->dispatched_asns ?? 0),
-            'total_returns'   => $totalReturns,
-            'outstanding'     => max(0, $totalVal - $paidAmt),
-        ];
+            return [
+                'total_pos'       => (int)($poAggregates->total_pos ?? 0),
+                'pending_pos'     => (int)($poAggregates->pending_pos ?? 0),
+                'total_asns'      => (int)($asnAggregates->total_asns ?? 0),
+                'dispatched_asns' => (int)($asnAggregates->dispatched_asns ?? 0),
+                'total_returns'   => $totalReturns,
+                'outstanding'     => max(0, $totalVal - $paidAmt),
+            ];
+        });
     }
     public function index(Request $request)
     {
