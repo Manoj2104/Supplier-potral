@@ -669,6 +669,22 @@
         </div>
       </div>
 
+      <!-- ⬇ Download Desktop App Banner -->
+      <div style="margin-top:18px; padding:14px 18px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1.5px solid #86efac; border-radius:12px; text-align:center;">
+        <div style="font-size:13px; font-weight:700; color:#15803d; margin-bottom:6px;">
+          <i class="bi bi-windows" style="margin-right:5px;"></i> Get the Desktop App — Opens Instantly!
+        </div>
+        <div style="font-size:12px; color:#166534; margin-bottom:10px;">
+          Faster access • Works offline login • No browser needed
+        </div>
+        <a href="/supplier/download-app"
+           style="display:inline-flex; align-items:center; gap:8px; background:#15803d; color:#fff; padding:9px 20px; border-radius:8px; font-size:13px; font-weight:700; text-decoration:none; transition:background 0.2s;"
+           onmouseover="this.style.background='#166534'" onmouseout="this.style.background='#15803d'">
+          <i class="bi bi-download"></i> Download Supplier Portal Setup (.exe)
+        </a>
+        <div style="font-size:11px; color:#4ade80; margin-top:6px;">Free • No activation key • Windows 10/11 x64</div>
+      </div>
+
     </div>
   </div>
 

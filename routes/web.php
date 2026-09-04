@@ -17,6 +17,22 @@ Route::get('/ping', function () {
     ], 200, ['Cache-Control' => 'no-cache, no-store']);
 });
 
+// ─── Supplier Desktop App Download ──────────────────────────────────────────
+Route::get('/supplier/download-app', function () {
+    // File stored in storage/app/public/supplier-setup/ or public/downloads/
+    $filePath = public_path('downloads/INFY-POS-Supplier-Portal-Setup.exe');
+    if (!file_exists($filePath)) {
+        // Fallback: serve from storage
+        $filePath = storage_path('app/public/supplier-setup/INFY-POS-Supplier-Portal-Setup.exe');
+    }
+    if (!file_exists($filePath)) {
+        abort(404, 'Installer not available yet. Please contact your administrator.');
+    }
+    return response()->download($filePath, 'INFY-POS-Supplier-Portal-Setup.exe', [
+        'Content-Type' => 'application/octet-stream',
+    ]);
+})->name('supplier.download-app');
+
 Route::get('/', function () {
     if (str_contains(request()->getHost(), 'onrender.com') || str_contains(request()->getHost(), 'supplier') || env('PORTAL_MODE') === 'supplier' || env('APP_ENV') === 'production') {
         return redirect()->route('supplier.dashboard');
