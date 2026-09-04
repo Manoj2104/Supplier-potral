@@ -21,6 +21,7 @@ storage/*
 !storage/countries/
 !storage/countries/**
 /node_modules
+/supplier-portal
 /public/hot
 /public/storage
 /vendor
@@ -30,5 +31,6 @@ storage/*
 !.env.render.example
 Homestead.json
 Homestead.yaml
+cookies.txt
 npm-debug.log
 yarn-error.log

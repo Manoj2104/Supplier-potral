@@ -115,6 +115,22 @@
                 max-width: calc(100vw - 70px) !important;
             }
 
+            @media (max-width: 991px) {
+                .d-flex.flex-row.flex-column-fluid > .d-flex.flex-column.flex-row-fluid > div:first-child header,
+                .d-flex.flex-row.flex-column-fluid > .d-flex.flex-column.flex-row-fluid > div:first-child .header,
+                #kt_header {
+                    left: 0 !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                }
+
+                .d-flex.flex-row.flex-column-fluid > .d-flex.flex-column.flex-row-fluid {
+                    margin-left: 0 !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                }
+            }
+
             /* Push Admin Page Content below the Fixed 64px Header */
             .d-flex.flex-row.flex-column-fluid .content,
             .d-flex.flex-row.flex-column-fluid .main-content {

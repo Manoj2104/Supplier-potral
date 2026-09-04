@@ -550,11 +550,13 @@
   .esb-sidebar {
     transform: translateX(-100%);
     transition: transform var(--sb-anim);
+    z-index: 1055;
   }
   .esb-sidebar.mobile-open {
     transform: translateX(0);
   }
   .esb-overlay.visible {
     display: block;
+    z-index: 1045;
   }
 }

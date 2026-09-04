@@ -45,6 +45,10 @@ class SupplierAPIController extends AppBaseController
         $input = $request->all();
         $supplier = $this->supplierRepository->create($input);
 
+        // Server-side Online Supabase Synchronization
+        \App\Services\SupplierSyncService::syncSupplier($supplier, $request->get('password'));
+        $supplier->refresh();
+
         return new SupplierResource($supplier);
     }
 
@@ -63,7 +67,28 @@ class SupplierAPIController extends AppBaseController
         $input = $request->all();
         $supplier = $this->supplierRepository->update($input, $id);
 
+        // Server-side Online Supabase Synchronization
+        \App\Services\SupplierSyncService::syncSupplier($supplier);
+        $supplier->refresh();
+
         return new SupplierResource($supplier);
+    }
+
+    public function retrySync($id): JsonResponse
+    {
+        $supplier = $this->supplierRepository->find($id);
+        if (!$supplier) {
+            return $this->sendError('Supplier not found.');
+        }
+
+        $result = \App\Services\SupplierSyncService::syncSupplier($supplier);
+        $supplier->refresh();
+
+        if ($result['success']) {
+            return $this->sendResponse(new SupplierResource($supplier), 'Supplier synced to Supabase successfully.');
+        }
+
+        return $this->sendError('Sync failed: ' . ($result['error'] ?? 'Unknown error'), 422);
     }
 
     public function destroy($id): JsonResponse

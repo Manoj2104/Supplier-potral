@@ -53,6 +53,10 @@ class Supplier extends BaseModel
         'country',
         'city',
         'address',
+        'supabase_user_id',
+        'sync_status',
+        'sync_error',
+        'last_synced_at',
     ];
 
     public static $rules = [
@@ -80,6 +84,10 @@ class Supplier extends BaseModel
             'country' => $this->country,
             'city' => $this->city,
             'address' => $this->address,
+            'supabase_user_id' => $this->supabase_user_id,
+            'sync_status' => $this->sync_status ?? 'synced',
+            'sync_error' => $this->sync_error,
+            'last_synced_at' => $this->last_synced_at,
             'created_at' => $this->created_at,
         ];
 

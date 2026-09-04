@@ -175,6 +175,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::resource('suppliers', SupplierAPIController::class);
     //    });
     Route::get('suppliers', [SupplierAPIController::class, 'index']);
+    Route::post('suppliers/{id}/retry-sync', [SupplierAPIController::class, 'retrySync']);
     Route::post('import-suppliers', [SupplierAPIController::class, 'importSuppliers']);
 
     // supplier payments

@@ -9,15 +9,17 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', function () {
-    return redirect()->route('supplier.dashboard');
+    if (str_contains(request()->getHost(), 'onrender.com') || str_contains(request()->getHost(), 'supplier') || env('PORTAL_MODE') === 'supplier' || env('APP_ENV') === 'production') {
+        return redirect()->route('supplier.dashboard');
+    }
+    return view('welcome');
 });
 
 Route::get('/login', function () {
-    return redirect()->route('supplier.login');
-});
-
-Route::get('/admin', function () {
-    return view('welcome');
+    if (str_contains(request()->getHost(), 'onrender.com') || str_contains(request()->getHost(), 'supplier') || env('PORTAL_MODE') === 'supplier' || env('APP_ENV') === 'production') {
+        return redirect()->route('supplier.login');
+    }
+    return redirect('/#/login');
 });
 
 Route::get('/auto-setup', function () {
@@ -1006,10 +1008,8 @@ Route::get('/api/inventory/master-stock', function() {
 // INFY-POS ENTERPRISE SaaS — PHASE 1 ROUTES
 // =======================================================================
 
-// Web Installer Wizard (Redirect to Dashboard on Web)
-Route::get('/install', function () {
-    return redirect('/#/app/dashboard');
-})->name('installer.index');
+// Web Installer Wizard
+Route::get('/install', [\App\Http\Controllers\InstallerController::class, 'index'])->name('installer.index');
 Route::post('/install/test-db', [\App\Http\Controllers\InstallerController::class, 'testDbConnection'])->name('installer.test-db');
 Route::post('/install/test-server', [\App\Http\Controllers\InstallerController::class, 'testServerConnection'])->name('installer.test-server');
 Route::get('/install/detect-printers', [\App\Http\Controllers\InstallerController::class, 'detectPrinters'])->name('installer.detect-printers');

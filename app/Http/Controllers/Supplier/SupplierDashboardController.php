@@ -23,15 +23,15 @@ class SupplierDashboardController extends Controller
     {
         // ── 1. Single Aggregated Query on Purchases Table ───────────────
         $poAggregates = Purchase::where('supplier_id', $supplierId)
-            ->selectRaw("
+            ->selectRaw('
                 COUNT(*) as total_pos,
                 COALESCE(SUM(grand_total), 0) as total_value,
                 COALESCE(SUM(paid_amount), 0) as paid_amount,
                 COUNT(CASE WHEN status = 1 THEN 1 END) as approved_pos,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_pos,
+                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as pending_pos,
                 COUNT(CASE WHEN status = 3 THEN 1 END) as ordered_pos,
-                COALESCE(SUM(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN grand_total ELSE 0 END), 0) as pending_value
-            ")
+                COALESCE(SUM(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN grand_total ELSE 0 END), 0) as pending_value
+            ')
             ->first();
 
         $totalPos     = (int) ($poAggregates->total_pos ?? 0);
@@ -58,15 +58,15 @@ class SupplierDashboardController extends Controller
 
         // ── 2. Single Aggregated Query on SupplierAsn Table ──────────────
         $asnAggregates = SupplierAsn::where('supplier_id', $supplierId)
-            ->selectRaw("
+            ->selectRaw('
                 COUNT(*) as total_asns,
-                COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft_count,
-                COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count,
-                COUNT(CASE WHEN status IN ('dispatched', 'in_transit', 'out_for_delivery', 'arrived', 'receiving', 'putaway_completed') THEN 1 END) as dispatched_count,
-                COUNT(CASE WHEN status IN ('in_transit', 'out_for_delivery') THEN 1 END) as in_transit_count,
-                COUNT(CASE WHEN status IN ('arrived', 'putaway_completed') THEN 1 END) as arrived_count,
-                COUNT(CASE WHEN invoice_number IS NOT NULL AND invoice_number != '' THEN 1 END) as invoice_count
-            ")
+                COUNT(CASE WHEN status = "draft" THEN 1 END) as draft_count,
+                COUNT(CASE WHEN status = "pending" THEN 1 END) as pending_count,
+                COUNT(CASE WHEN status IN ("dispatched", "in_transit", "out_for_delivery", "arrived", "receiving", "putaway_completed") THEN 1 END) as dispatched_count,
+                COUNT(CASE WHEN status IN ("in_transit", "out_for_delivery") THEN 1 END) as in_transit_count,
+                COUNT(CASE WHEN status IN ("arrived", "putaway_completed") THEN 1 END) as arrived_count,
+                COUNT(CASE WHEN invoice_number IS NOT NULL AND invoice_number != "" THEN 1 END) as invoice_count
+            ')
             ->first();
 
         $totalAsns       = (int) ($asnAggregates->total_asns ?? 0);
@@ -155,13 +155,11 @@ class SupplierDashboardController extends Controller
             ->where('is_read', false)
             ->count();
 
-        // ── 8. Monthly Aggregated Chart Data (Cross-DB Compatible Query) ────
-        $isPgsql = DB::getDriverName() === 'pgsql';
-        $monthExpr = $isPgsql ? 'EXTRACT(MONTH FROM date)' : 'MONTH(date)';
+        // ── 8. Monthly Aggregated Chart Data (Single Grouped Query) ────
         $monthlySums = Purchase::where('supplier_id', $supplierId)
             ->whereYear('date', date('Y'))
-            ->selectRaw("{$monthExpr} as month_num, SUM(grand_total) as sum_total")
-            ->groupBy(DB::raw($monthExpr))
+            ->selectRaw('MONTH(date) as month_num, SUM(grand_total) as sum_total')
+            ->groupBy(DB::raw('MONTH(date)'))
             ->pluck('sum_total', 'month_num')
             ->toArray();
 
@@ -201,15 +199,7 @@ class SupplierDashboardController extends Controller
      */
     public function index(Request $request)
     {
-        $portal = $request->supplier_portal;
-        if (!$portal) {
-            $portal = \App\Models\SupplierPortal::with('supplier')->first();
-            if ($portal) {
-                session()->put('supplier_portal_id', $portal->id);
-                view()->share('supplierPortal', $portal);
-                view()->share('supplierInfo', $portal->supplier);
-            }
-        }
+        $portal     = $request->supplier_portal;
         $supplierId = $portal ? $portal->supplier_id : 1;
         $supplierInfo = $portal && $portal->supplier ? $portal->supplier : (Supplier::find($supplierId) ?? (object)['name' => 'Jeyachandran Textile Private Limited']);
 
