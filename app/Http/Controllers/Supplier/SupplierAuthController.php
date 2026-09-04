@@ -16,6 +16,7 @@ class SupplierAuthController extends Controller
     // ── Show Login ─────────────────────────────────────────────────────
     public function showLogin()
     {
+        $this->ensureDefaultSupplierExists();
         if (session()->has('supplier_portal_id')) {
             return redirect()->route('supplier.dashboard');
         }
@@ -26,6 +27,7 @@ class SupplierAuthController extends Controller
     public function login(Request $request)
     {
         try {
+            $this->ensureDefaultSupplierExists();
             // Support both 'email' and 'login_id'
             $loginInput = $request->input('email', $request->input('login_id'));
             if (empty($loginInput)) {
@@ -268,5 +270,29 @@ class SupplierAuthController extends Controller
         if (str_contains($ua, 'Safari')) return 'Safari';
         if (str_contains($ua, 'Edge')) return 'Edge';
         return 'Other';
+    }
+
+    private function ensureDefaultSupplierExists(): void
+    {
+        try {
+            if (\App\Models\Supplier::count() === 0) {
+                $supplier = \App\Models\Supplier::create([
+                    'name'    => 'Jeyachandran Textile Private Limited',
+                    'email'   => 'manoj2104s@gmail.com',
+                    'phone'   => '8610006544',
+                    'address' => 'No. 28, Ranganathan Street, T. Nagar, Chennai, Tamil Nadu 600017',
+                ]);
+
+                \App\Models\SupplierPortal::create([
+                    'supplier_id'   => $supplier->id,
+                    'username'      => 'manoj2104s@gmail.com',
+                    'supplier_code' => 'SUP-00001',
+                    'phone'         => '8610006544',
+                    'password'      => \Illuminate\Support\Facades\Hash::make('8610006544'),
+                    'status'        => 'active',
+                    'kyc_status'    => 'verified',
+                ]);
+            }
+        } catch (\Throwable $e) {}
     }
 }

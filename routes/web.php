@@ -8,11 +8,15 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-Route::get('/login', function () {
-    return redirect('/#/login');
+Route::get('/', function () {
+    return redirect()->route('supplier.dashboard');
 });
 
-Route::get('/', function () {
+Route::get('/login', function () {
+    return redirect()->route('supplier.login');
+});
+
+Route::get('/admin', function () {
     return view('welcome');
 });
 
