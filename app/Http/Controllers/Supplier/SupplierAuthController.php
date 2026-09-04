@@ -44,30 +44,35 @@ class SupplierAuthController extends Controller
             ]);
 
             $loginId = trim($loginInput);
+            $loginLower = strtolower($loginId);
             $cleanPhone = preg_replace('/[^0-9]/', '', $loginId);
-            $last10Phone = strlen($cleanPhone) >= 10 ? substr($cleanPhone, -10) : $cleanPhone;
+            $last10Phone = strlen($cleanPhone) >= 10 ? substr($cleanPhone, -10) : '';
 
-            // 1. Search in SupplierPortal by username, email, supplier_code, or phone
-            $portal = SupplierPortal::where('username', $loginId)
-                ->orWhere('supplier_code', $loginId)
-                ->orWhere('phone', $loginId)
-                ->when(!empty($cleanPhone), function ($query) use ($cleanPhone, $last10Phone) {
-                    $query->orWhere('phone', 'LIKE', '%' . $cleanPhone . '%')
-                          ->orWhere('phone', 'LIKE', '%' . $last10Phone . '%');
-                })
-                ->with('supplier')
-                ->first();
+            // 1. Search in SupplierPortal by username (case-insensitive), supplier_code, or phone
+            $portal = SupplierPortal::where(function ($query) use ($loginLower, $loginId, $last10Phone) {
+                $query->whereRaw('LOWER(username) = ?', [$loginLower])
+                      ->orWhereRaw('LOWER(supplier_code) = ?', [$loginLower])
+                      ->orWhere('phone', $loginId);
+                if (!empty($last10Phone)) {
+                    $query->orWhere('phone', 'LIKE', '%' . $last10Phone . '%');
+                }
+            })
+            ->with('supplier')
+            ->first();
 
             // 2. If not found in supplier_portals table, search in suppliers table and auto-sync!
             if (!$portal) {
-                $supplier = Supplier::where('email', $loginId)
-                    ->orWhere('phone', $loginId)
-                    ->when(!empty($cleanPhone), function ($query) use ($cleanPhone, $last10Phone) {
-                        $query->orWhere('phone', 'LIKE', '%' . $cleanPhone . '%')
-                              ->orWhere('phone', 'LIKE', '%' . $last10Phone . '%');
-                    })
-                    ->orWhere('id', str_replace('SUP-', '', $loginId))
-                    ->first();
+                $supplier = Supplier::where(function ($query) use ($loginLower, $loginId, $last10Phone) {
+                    $query->whereRaw('LOWER(email) = ?', [$loginLower])
+                          ->orWhere('phone', $loginId);
+                    if (!empty($last10Phone)) {
+                        $query->orWhere('phone', 'LIKE', '%' . $last10Phone . '%');
+                    }
+                    $candidateId = str_replace('sup-', '', $loginLower);
+                    if (is_numeric($candidateId)) {
+                        $query->orWhere('id', (int) $candidateId);
+                    }
+                })->first();
 
                 if ($supplier) {
                     $supplierCode = 'SUP-' . str_pad($supplier->id, 5, '0', STR_PAD_LEFT);
