@@ -21,19 +21,19 @@ class SupplierPurchaseController extends Controller
     private function getSidebarCounts(int $supplierId): array
     {
         $poAggregates = Purchase::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_pos,
                 COALESCE(SUM(grand_total), 0) as total_value,
                 COALESCE(SUM(paid_amount), 0) as paid_amount,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as pending_pos
-            ')
+                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_pos
+            ")
             ->first();
 
         $asnAggregates = SupplierAsn::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_asns,
-                COUNT(CASE WHEN status IN ("dispatched", "in_transit", "out_for_delivery", "arrived", "receiving", "putaway_completed") THEN 1 END) as dispatched_asns
-            ')
+                COUNT(CASE WHEN status IN ('dispatched', 'in_transit', 'out_for_delivery', 'arrived', 'receiving', 'putaway_completed') THEN 1 END) as dispatched_asns
+            ")
             ->first();
 
         $totalReturns = PurchaseReturn::where('supplier_id', $supplierId)->count();
@@ -90,13 +90,13 @@ class SupplierPurchaseController extends Controller
 
         // Fast Single Aggregated Stats Query
         $poAggregates = Purchase::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_pos,
                 COALESCE(SUM(grand_total), 0) as total_value,
-                COUNT(CASE WHEN status = 1 AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as approved_count,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as pending_count,
-                COUNT(CASE WHEN notes LIKE "%REJECTED%" THEN 1 END) as rejected_count
-            ')
+                COUNT(CASE WHEN status = 1 AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as approved_count,
+                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_count,
+                COUNT(CASE WHEN notes LIKE '%REJECTED%' THEN 1 END) as rejected_count
+            ")
             ->first();
 
         $allAsns = SupplierAsn::where('supplier_id', $supplierId)->get(['id', 'purchase_id', 'status', 'invoice_number']);
@@ -251,12 +251,12 @@ class SupplierPurchaseController extends Controller
 
         // Fast Single Aggregated Stats Query
         $poAggregates = Purchase::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_all,
-                COUNT(CASE WHEN status = 1 AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as approved_count,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as pending_count,
-                COUNT(CASE WHEN notes LIKE "%REJECTED%" THEN 1 END) as rejected_count
-            ')
+                COUNT(CASE WHEN status = 1 AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as approved_count,
+                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_count,
+                COUNT(CASE WHEN notes LIKE '%REJECTED%' THEN 1 END) as rejected_count
+            ")
             ->first();
 
         $pendingCount  = (int)($poAggregates->pending_count ?? 0);
@@ -327,16 +327,16 @@ class SupplierPurchaseController extends Controller
 
         // Fast Single-Pass SQL Aggregate for KPIs & Totals
         $stats = Purchase::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_count,
                 COALESCE(SUM(grand_total), 0) as total_value,
                 COALESCE(SUM(paid_amount), 0) as paid_amount,
                 COUNT(CASE WHEN status = 1 THEN 1 END) as approved_count,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as pending_count,
-                COUNT(CASE WHEN notes LIKE "%REJECTED%" THEN 1 END) as rejected_count,
+                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_count,
+                COUNT(CASE WHEN notes LIKE '%REJECTED%' THEN 1 END) as rejected_count,
                 COUNT(CASE WHEN paid_amount >= grand_total AND grand_total > 0 THEN 1 END) as paid_count,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND date < CURDATE() THEN 1 END) as overdue_count
-            ')
+                COUNT(CASE WHEN status IN (0, 2, 3) AND date < CURRENT_DATE THEN 1 END) as overdue_count
+            ")
             ->first();
 
         $totalCount     = (int)($stats->total_count ?? 0);
@@ -383,16 +383,16 @@ class SupplierPurchaseController extends Controller
         $supplierId = $portal ? $portal->supplier_id : 1;
 
         $stats = Purchase::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_count,
                 COALESCE(SUM(grand_total), 0) as total_value,
                 COALESCE(SUM(paid_amount), 0) as paid_amount,
                 COUNT(CASE WHEN status = 1 THEN 1 END) as approved_count,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as pending_count,
-                COUNT(CASE WHEN notes LIKE "%REJECTED%" THEN 1 END) as rejected_count,
+                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_count,
+                COUNT(CASE WHEN notes LIKE '%REJECTED%' THEN 1 END) as rejected_count,
                 COUNT(CASE WHEN paid_amount >= grand_total AND grand_total > 0 THEN 1 END) as paid_count,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND date < CURDATE() THEN 1 END) as overdue_count
-            ')
+                COUNT(CASE WHEN status IN (0, 2, 3) AND date < CURRENT_DATE THEN 1 END) as overdue_count
+            ")
             ->first();
 
         $totalCount     = (int)($stats->total_count ?? 0);

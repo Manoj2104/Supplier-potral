@@ -15,19 +15,19 @@ class SupplierAsnController extends Controller
     private function getSidebarCounts(int $supplierId): array
     {
         $poAggregates = Purchase::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_pos,
                 COALESCE(SUM(grand_total), 0) as total_value,
                 COALESCE(SUM(paid_amount), 0) as paid_amount,
-                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE "%REJECTED%") THEN 1 END) as pending_pos
-            ')
+                COUNT(CASE WHEN status IN (0, 2, 3) AND (notes IS NULL OR notes NOT LIKE '%REJECTED%') THEN 1 END) as pending_pos
+            ")
             ->first();
 
         $asnAggregates = SupplierAsn::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_asns,
-                COUNT(CASE WHEN status IN ("dispatched", "in_transit", "out_for_delivery", "arrived", "receiving", "putaway_completed") THEN 1 END) as dispatched_asns
-            ')
+                COUNT(CASE WHEN status IN ('dispatched', 'in_transit', 'out_for_delivery', 'arrived', 'receiving', 'putaway_completed') THEN 1 END) as dispatched_asns
+            ")
             ->first();
 
         $totalReturns = PurchaseReturn::where('supplier_id', $supplierId)->count();
@@ -50,16 +50,16 @@ class SupplierAsnController extends Controller
 
         // Fast SQL Aggregates for All Counts
         $asnAggregates = SupplierAsn::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_all,
-                COUNT(CASE WHEN status = "draft" THEN 1 END) as draft_count,
-                COUNT(CASE WHEN status IN ("draft", "pending") THEN 1 END) as packing_count,
-                COUNT(CASE WHEN status IN ("accepted", "ready") THEN 1 END) as ready_count,
-                COUNT(CASE WHEN status IN ("dispatched", "in_transit", "out_for_delivery") THEN 1 END) as in_transit_count,
-                COUNT(CASE WHEN status IN ("arrived", "delivered") THEN 1 END) as delivered_count,
-                COUNT(CASE WHEN status IN ("receiving", "verified") THEN 1 END) as received_count,
-                COUNT(CASE WHEN status = "completed" THEN 1 END) as completed_count
-            ')
+                COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft_count,
+                COUNT(CASE WHEN status IN ('draft', 'pending') THEN 1 END) as packing_count,
+                COUNT(CASE WHEN status IN ('accepted', 'ready') THEN 1 END) as ready_count,
+                COUNT(CASE WHEN status IN ('dispatched', 'in_transit', 'out_for_delivery') THEN 1 END) as in_transit_count,
+                COUNT(CASE WHEN status IN ('arrived', 'delivered') THEN 1 END) as delivered_count,
+                COUNT(CASE WHEN status IN ('receiving', 'verified') THEN 1 END) as received_count,
+                COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count
+            ")
             ->first();
 
         // Approved POs without ASN yet
@@ -496,14 +496,14 @@ class SupplierAsnController extends Controller
         }
 
         $stats = SupplierAsn::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_all,
-                COUNT(CASE WHEN status IN ("draft", "pending", "") OR status IS NULL THEN 1 END) as preparing_count,
-                COUNT(CASE WHEN status IN ("dispatched", "accepted") THEN 1 END) as dispatched_count,
-                COUNT(CASE WHEN status = "in_transit" THEN 1 END) as in_transit_count,
-                COUNT(CASE WHEN status IN ("arrived", "completed", "delivered", "verified", "receiving", "putaway_completed") THEN 1 END) as delivered_count,
-                COUNT(CASE WHEN status = "rejected" THEN 1 END) as delayed_count
-            ')
+                COUNT(CASE WHEN status IN ('draft', 'pending', '') OR status IS NULL THEN 1 END) as preparing_count,
+                COUNT(CASE WHEN status IN ('dispatched', 'accepted') THEN 1 END) as dispatched_count,
+                COUNT(CASE WHEN status = 'in_transit' THEN 1 END) as in_transit_count,
+                COUNT(CASE WHEN status IN ('arrived', 'completed', 'delivered', 'verified', 'receiving', 'putaway_completed') THEN 1 END) as delivered_count,
+                COUNT(CASE WHEN status = 'rejected' THEN 1 END) as delayed_count
+            ")
             ->first();
 
         $counts = [
@@ -529,14 +529,14 @@ class SupplierAsnController extends Controller
         $supplierId = $portal ? $portal->supplier_id : 1;
 
         $stats = SupplierAsn::where('supplier_id', $supplierId)
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_all,
-                COUNT(CASE WHEN status IN ("draft", "pending", "") OR status IS NULL THEN 1 END) as preparing_count,
-                COUNT(CASE WHEN status IN ("dispatched", "accepted") THEN 1 END) as dispatched_count,
-                COUNT(CASE WHEN status = "in_transit" THEN 1 END) as in_transit_count,
-                COUNT(CASE WHEN status IN ("arrived", "completed", "delivered", "verified", "receiving", "putaway_completed") THEN 1 END) as delivered_count,
-                COUNT(CASE WHEN status = "rejected" THEN 1 END) as delayed_count
-            ')
+                COUNT(CASE WHEN status IN ('draft', 'pending', '') OR status IS NULL THEN 1 END) as preparing_count,
+                COUNT(CASE WHEN status IN ('dispatched', 'accepted') THEN 1 END) as dispatched_count,
+                COUNT(CASE WHEN status = 'in_transit' THEN 1 END) as in_transit_count,
+                COUNT(CASE WHEN status IN ('arrived', 'completed', 'delivered', 'verified', 'receiving', 'putaway_completed') THEN 1 END) as delivered_count,
+                COUNT(CASE WHEN status = 'rejected' THEN 1 END) as delayed_count
+            ")
             ->first();
 
         $counts = [
@@ -645,14 +645,14 @@ class SupplierAsnController extends Controller
 
         if ($request->expectsJson() || $request->ajax()) {
             $stats = SupplierAsn::where('supplier_id', $supplierId)
-                ->selectRaw('
+                ->selectRaw("
                     COUNT(*) as total_all,
-                    COUNT(CASE WHEN status IN ("draft", "pending", "") OR status IS NULL THEN 1 END) as preparing_count,
-                    COUNT(CASE WHEN status = "accepted" THEN 1 END) as dispatched_count,
-                    COUNT(CASE WHEN status = "in_transit" THEN 1 END) as in_transit_count,
-                    COUNT(CASE WHEN status IN ("arrived", "completed", "delivered", "verified", "receiving", "putaway_completed") THEN 1 END) as delivered_count,
-                    COUNT(CASE WHEN status = "rejected" THEN 1 END) as delayed_count
-                ')
+                    COUNT(CASE WHEN status IN ('draft', 'pending', '') OR status IS NULL THEN 1 END) as preparing_count,
+                    COUNT(CASE WHEN status = 'accepted' THEN 1 END) as dispatched_count,
+                    COUNT(CASE WHEN status = 'in_transit' THEN 1 END) as in_transit_count,
+                    COUNT(CASE WHEN status IN ('arrived', 'completed', 'delivered', 'verified', 'receiving', 'putaway_completed') THEN 1 END) as delivered_count,
+                    COUNT(CASE WHEN status = 'rejected' THEN 1 END) as delayed_count
+                ")
                 ->first();
 
             $counts = [
