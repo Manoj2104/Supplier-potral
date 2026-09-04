@@ -52,8 +52,31 @@ RUN mkdir -p /var/www/html/storage/framework/sessions \
 # Install dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-reqs
 
+# Configure PHP OPcache for maximum performance
+RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.memory_consumption=128" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.interned_strings_buffer=8" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.max_accelerated_files=10000" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.revalidate_freq=0" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.validate_timestamps=0" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.fast_shutdown=1" >> /usr/local/etc/php/conf.d/opcache.ini
+
 # Expose port (Render sets $PORT dynamically)
 EXPOSE 80 8080 10000
 
-# Start script: Prepare Apache, fix storage permissions, run background migrations and seeding, and start Apache foreground
-CMD sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf && mkdir -p /var/www/html/storage/framework/cache/data /var/www/html/storage/framework/sessions /var/www/html/storage/framework/views /var/www/html/storage/logs /var/www/html/bootstrap/cache && chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && (php artisan storage:link || true) && (php artisan config:clear || true) && ((php artisan migrate --force && php artisan db:seed --force) || true) & exec apache2-foreground
+# Optimized start: cache config/routes/views at boot for instant page loads
+CMD sed -i "s/80/${PORT:-80}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf \
+    && mkdir -p /var/www/html/storage/framework/cache/data \
+              /var/www/html/storage/framework/sessions \
+              /var/www/html/storage/framework/views \
+              /var/www/html/storage/logs \
+              /var/www/html/bootstrap/cache \
+              /tmp/views \
+    && chmod -R 777 /var/www/html/storage /var/www/html/bootstrap/cache /tmp/views \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && (php artisan storage:link || true) \
+    && (php artisan config:cache || true) \
+    && (php artisan route:cache  || true) \
+    && (php artisan view:cache   || true) \
+    && ((php artisan migrate --force && php artisan db:seed --force) || true) & \
+    exec apache2-foreground

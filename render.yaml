@@ -11,26 +11,30 @@ services:
       - key: APP_ENV
         value: production
       - key: APP_DEBUG
-        value: "true"
+        value: "false"
       - key: APP_KEY
         generateValue: true
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
-        value: db.ejbygpiozuaomomshazl.supabase.co
+        value: aws-0-ap-southeast-2.pooler.supabase.com
       - key: DB_PORT
         value: "5432"
       - key: DB_DATABASE
         value: postgres
       - key: DB_USERNAME
-        value: postgres
+        value: postgres.ejbygpiozuaomomshazl
       - key: DB_PASSWORD
         value: Manojnandhini@2104
       - key: DB_SSLMODE
         value: require
       - key: CACHE_DRIVER
-        value: array
+        value: file
       - key: SESSION_DRIVER
         value: file
       - key: LOG_CHANNEL
         value: stderr
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: VIEW_COMPILED_PATH
+        value: /tmp/views

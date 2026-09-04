@@ -12,6 +12,7 @@ use App\Models\Supplier;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class SupplierDashboardController extends Controller
 {
@@ -210,7 +211,8 @@ class SupplierDashboardController extends Controller
         $supplierId = $portal ? $portal->supplier_id : 1;
         $supplierInfo = $portal && $portal->supplier ? $portal->supplier : (Supplier::find($supplierId) ?? (object)['name' => 'Jeyachandran Textile Private Limited']);
 
-        $data = $this->getAggregatedData($supplierId);
+        $cacheKey = "supplier_dashboard_{$supplierId}";
+        $data = Cache::remember($cacheKey, 60, fn() => $this->getAggregatedData($supplierId));
 
         return view('supplier.dashboard', array_merge($data, [
             'portal'       => $portal,
