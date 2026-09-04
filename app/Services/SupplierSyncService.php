@@ -16,11 +16,11 @@ class SupplierSyncService
         return [
             'url' => rtrim(env('SUPABASE_URL', 'https://ejbygpiozuaomomshazl.supabase.co'), '/'),
             'secret_key' => env('SUPABASE_SECRET_KEY', ''),
-            'db_host' => env('SUPABASE_DB_HOST', env('DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co')),
-            'db_port' => env('SUPABASE_DB_PORT', env('DB_PORT', '5432')),
-            'db_database' => env('SUPABASE_DB_DATABASE', env('DB_DATABASE', 'postgres')),
-            'db_user' => env('SUPABASE_DB_USERNAME', env('DB_USERNAME', 'postgres')),
-            'db_pass' => env('SUPABASE_DB_PASSWORD', env('DB_PASSWORD', '')),
+            'db_host' => env('SUPABASE_DB_HOST', 'aws-0-ap-southeast-2.pooler.supabase.com'),
+            'db_port' => env('SUPABASE_DB_PORT', '5432'),
+            'db_database' => env('SUPABASE_DB_DATABASE', 'postgres'),
+            'db_user' => env('SUPABASE_DB_USERNAME', 'postgres.ejbygpiozuaomomshazl'),
+            'db_pass' => env('SUPABASE_DB_PASSWORD', 'Manojnandhini@2104'),
         ];
     }
 

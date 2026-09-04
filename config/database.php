@@ -87,11 +87,11 @@ return [
         ],
 
         'pgsql' => (function () {
-            // DIRECT SUPABASE POSTGRESQL (Shared online database)
-            $host = env('SUPABASE_DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co');
+            // VERIFIED IPv4 SUPABASE POOLER (Region: ap-southeast-2)
+            $host = env('SUPABASE_DB_HOST', 'aws-0-ap-southeast-2.pooler.supabase.com');
             $port = (string) env('SUPABASE_DB_PORT', '5432');
             $database = env('SUPABASE_DB_DATABASE', 'postgres');
-            $username = env('SUPABASE_DB_USERNAME', 'postgres');
+            $username = env('SUPABASE_DB_USERNAME', 'postgres.ejbygpiozuaomomshazl');
             $password = env('SUPABASE_DB_PASSWORD', 'Manojnandhini@2104');
 
             return [

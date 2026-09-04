@@ -28,10 +28,10 @@ WORKDIR /var/www/html
 # Set default cloud environment variables
 ENV DB_CONNECTION=pgsql
 ENV PORTAL_MODE=supplier
-ENV DB_HOST=db.ejbygpiozuaomomshazl.supabase.co
+ENV DB_HOST=aws-0-ap-southeast-2.pooler.supabase.com
 ENV DB_PORT=5432
 ENV DB_DATABASE=postgres
-ENV DB_USERNAME=postgres
+ENV DB_USERNAME=postgres.ejbygpiozuaomomshazl
 ENV DB_SSLMODE=require
 
 # Install Composer
