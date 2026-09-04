@@ -87,22 +87,12 @@ return [
         ],
 
         'pgsql' => (function () {
-            $supabaseHost = 'db.ejbygpiozuaomomshazl.supabase.co';
-            $supabasePass = 'Manojnandhini@2104';
-
-            $host = env('SUPABASE_DB_HOST', env('DB_HOST', $supabaseHost));
-            $port = (string) env('SUPABASE_DB_PORT', env('DB_PORT', '5432'));
-            $database = env('SUPABASE_DB_DATABASE', env('DB_DATABASE', 'postgres'));
-            $username = env('SUPABASE_DB_USERNAME', env('DB_USERNAME', 'postgres'));
-            $password = env('SUPABASE_DB_PASSWORD', env('DB_PASSWORD', $supabasePass));
-
-            if (empty($host) || $host === '127.0.0.1' || $host === 'localhost') {
-                $host = $supabaseHost;
-                $password = $supabasePass;
-                $database = 'postgres';
-                $username = 'postgres';
-                $port = '5432';
-            }
+            // DIRECT SUPABASE POSTGRESQL (Shared online database)
+            $host = env('SUPABASE_DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co');
+            $port = (string) env('SUPABASE_DB_PORT', '5432');
+            $database = env('SUPABASE_DB_DATABASE', 'postgres');
+            $username = env('SUPABASE_DB_USERNAME', 'postgres');
+            $password = env('SUPABASE_DB_PASSWORD', 'Manojnandhini@2104');
 
             return [
                 'driver' => 'pgsql',
@@ -116,7 +106,7 @@ return [
                 'prefix' => '',
                 'prefix_indexes' => true,
                 'search_path' => 'public',
-                'sslmode' => env('DB_SSLMODE', 'require'),
+                'sslmode' => 'require',
             ];
         })(),
 
