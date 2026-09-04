@@ -87,34 +87,28 @@ return [
         ],
 
         'pgsql' => (function () {
-            $url = env('DATABASE_URL');
-            $parsed = $url ? parse_url($url) : [];
+            $supabaseHost = 'db.ejbygpiozuaomomshazl.supabase.co';
+            $supabasePass = 'Manojnandhini@2104';
 
-            $isPgsqlDefault = env('DB_CONNECTION') === 'pgsql';
+            $host = env('SUPABASE_DB_HOST', env('DB_HOST', $supabaseHost));
+            $port = (string) env('SUPABASE_DB_PORT', env('DB_PORT', '5432'));
+            $database = env('SUPABASE_DB_DATABASE', env('DB_DATABASE', 'postgres'));
+            $username = env('SUPABASE_DB_USERNAME', env('DB_USERNAME', 'postgres'));
+            $password = env('SUPABASE_DB_PASSWORD', env('DB_PASSWORD', $supabasePass));
 
-            $host = $parsed['host'] ?? ($isPgsqlDefault ? env('DB_HOST', 'db.ejbygpiozuaomomshazl.supabase.co') : env('PGSQL_HOST', 'db.ejbygpiozuaomomshazl.supabase.co'));
-            $port = $parsed['port'] ?? ($isPgsqlDefault ? env('DB_PORT', '5432') : env('PGSQL_PORT', '5432'));
-            $database = isset($parsed['path']) ? ltrim($parsed['path'], '/') : ($isPgsqlDefault ? env('DB_DATABASE', 'postgres') : env('PGSQL_DATABASE', 'postgres'));
-            $username = $parsed['user'] ?? ($isPgsqlDefault ? env('DB_USERNAME', 'postgres') : env('PGSQL_USERNAME', 'postgres'));
-            $password = $parsed['pass'] ?? ($isPgsqlDefault ? env('DB_PASSWORD', 'Manojnandhini@2104') : env('PGSQL_PASSWORD', 'Manojnandhini@2104'));
-
-            if (isset($parsed['host']) && !empty($parsed['host'])) {
-                $host = $parsed['host'];
-            }
-
-            // AUTO-FIX: Render PostgreSQL always listens on port 5432. If 6543 was configured, force 5432!
-            if (!empty($url) && str_contains($url, ':6543')) {
-                $url = str_replace(':6543', ':5432', $url);
-            }
-            if ((string)$port === '6543' && (str_contains((string)$host, 'render.com') || str_contains((string)$url, 'render.com'))) {
+            if (empty($host) || $host === '127.0.0.1' || $host === 'localhost') {
+                $host = $supabaseHost;
+                $password = $supabasePass;
+                $database = 'postgres';
+                $username = 'postgres';
                 $port = '5432';
             }
 
             return [
                 'driver' => 'pgsql',
-                'url' => $url,
+                'url' => null,
                 'host' => $host,
-                'port' => (string) $port,
+                'port' => $port,
                 'database' => $database,
                 'username' => $username,
                 'password' => $password,
