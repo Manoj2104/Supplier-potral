@@ -989,8 +989,15 @@
         </div>
       @endif
 
-      <div id="sp-real-content">
-        @yield('content')
+      <div id="sp-views-container">
+        <div class="sp-view-pane" id="sp-pane-root" data-url="{{ request()->getPathInfo() }}" data-title="@yield('title', 'Dashboard') — INFY-POS Supplier Portal" style="display:block;">
+          <div id="sp-real-content">
+            @yield('content')
+            <div class="sp-pane-scripts" style="display:none;">
+              @yield('scripts')
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -1430,16 +1437,12 @@
   };
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ⚡ SP-INSTANT-NAV: 0ms ULTRA TURBO PERSISTENT SPA ENGINE
+  // ══════════════════════════════════════════════════════════════════════════
+  // ⚡ SP-INSTANT-NAV: 0.00ms PERSISTENT DOM TABBED-PANE ENGINE
   // ══════════════════════════════════════════════════════════════════════════
   const SpInstantNav = (function() {
-    const CACHE_PREFIX = 'sp_snap_v2_';
-    const cache = new Map();
-    const prefetchQueue = new Set();
-    let isNavigating = false;
-    let warmupActive = false;
-
-    // Standard Core Routes for sequential background warming
+    let isInitialized = false;
+    const panes = new Map(); // normUrl -> DOMElement
     const coreRoutes = [
       '/supplier/dashboard',
       '/supplier/purchase-orders',
@@ -1448,90 +1451,39 @@
       '/supplier/cartons',
       '/supplier/shipments',
       '/supplier/invoices',
-      '/supplier/warehouse',
-      '/supplier/stock-receiving',
-      '/supplier/returns',
       '/supplier/payments',
+      '/supplier/returns',
       '/supplier/notifications',
       '/supplier/profile'
     ];
 
     function init() {
-      // 1. Purge legacy v1 cache entries from sessionStorage
-      try {
-        const toRemove = [];
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          if (key && key.startsWith('sp_snap_v1_')) {
-            toRemove.push(key);
-          }
-        }
-        toRemove.forEach(k => sessionStorage.removeItem(k));
-      } catch(e) {}
+      if (isInitialized) return;
+      isInitialized = true;
 
-      // 2. Hydrate memory cache from sessionStorage
-      hydrateCacheFromStorage();
+      // 1. Register root view pane
+      const rootPane = document.getElementById('sp-pane-root');
+      const rootUrl = getNormalizedUrl(window.location.href);
+      if (rootPane && rootUrl) {
+        rootPane.setAttribute('data-url', rootUrl);
+        rootPane.setAttribute('data-title', document.title);
+        panes.set(rootUrl, rootPane);
+      }
 
-      // 3. Save current initial page snapshot immediately
-      saveCurrentPageToCache();
-
-      // 4. Fast Pointerdown Preloader (fires 100ms before click)
-      document.addEventListener('pointerdown', handlePointerDown, { passive: true });
+      // 2. Fast Pointerdown / Hover Preloaders
+      document.addEventListener('pointerdown', handlePointerPrefetch, { passive: true });
       document.addEventListener('mouseover', handleHoverPrefetch, { passive: true });
-      document.addEventListener('touchstart', handleHoverPrefetch, { passive: true });
 
-      // 5. Intercept all internal navigation clicks for 0ms swap
+      // 3. Click interceptor for 0.00ms view pane switching
       document.addEventListener('click', handleGlobalClick, true);
 
-      // 6. Browser Back & Forward popstate handling
+      // 4. Browser Back / Forward popstate
       window.addEventListener('popstate', handlePopState);
 
-      // 7. Sequential gentle warmup after main UI is fully idle
+      // 5. Pre-Mount all core routes in sequence after initial render
       setTimeout(() => {
-        startSequentialWarmup();
-      }, 500);
-    }
-
-    function hydrateCacheFromStorage() {
-      try {
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          if (key && key.startsWith(CACHE_PREFIX)) {
-            const url = key.replace(CACHE_PREFIX, '');
-            const raw = sessionStorage.getItem(key);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              cache.set(url, parsed);
-            }
-          }
-        }
-      } catch(e) {}
-    }
-
-    function getFromCache(url) {
-      if (cache.has(url)) return cache.get(url);
-      try {
-        const raw = sessionStorage.getItem(CACHE_PREFIX + url);
-        if (raw) {
-          const data = JSON.parse(raw);
-          cache.set(url, data);
-          return data;
-        }
-      } catch(e) {}
-      return null;
-    }
-
-    function setToCache(url, pageData) {
-      cache.set(url, pageData);
-      try {
-        sessionStorage.setItem(CACHE_PREFIX + url, JSON.stringify(pageData));
-      } catch(e) {
-        // If quota exceeded, clean oldest entries
-        try {
-          sessionStorage.clear();
-          sessionStorage.setItem(CACHE_PREFIX + url, JSON.stringify(pageData));
-        } catch(err) {}
-      }
+        premountCorePanes();
+      }, 400);
     }
 
     function getNormalizedUrl(url) {
@@ -1540,107 +1492,20 @@
         if (u.origin !== window.location.origin) return null;
         if (!u.pathname.startsWith('/supplier')) return null;
         if (u.pathname.includes('/logout') || u.pathname.includes('/login') || u.pathname.includes('/pdf') || u.pathname.includes('/download') || u.pathname.includes('/export')) return null;
-        return u.pathname + u.search;
+        return u.pathname;
       } catch(e) {
         return null;
       }
     }
 
-    function saveCurrentPageToCache() {
-      const main = document.getElementById('sp-real-content');
-      if (!main || !main.innerHTML || main.innerHTML.trim().length < 50) return;
-      const normUrl = getNormalizedUrl(window.location.href);
-      if (!normUrl) return;
-
-      const dynamicStyles = document.getElementById('sp-dynamic-styles');
-      setToCache(normUrl, {
-        title: document.title,
-        html: main.innerHTML,
-        styles: dynamicStyles ? dynamicStyles.innerHTML : '',
-        timestamp: Date.now()
-      });
-    }
-
-    async function startSequentialWarmup() {
-      if (warmupActive) return;
-      warmupActive = true;
-
-      // Extract all links currently visible in the DOM as well
-      const domLinks = Array.from(document.querySelectorAll('.sp-nav-item-v2, .sp-app-tile, .sp-kpi-card, .sp-tab-item'))
-        .map(el => el.getAttribute('href'))
-        .filter(Boolean);
-
-      const allRoutes = Array.from(new Set([...coreRoutes, ...domLinks]));
-
-      for (const route of allRoutes) {
-        const norm = getNormalizedUrl(route);
-        if (norm && !cache.has(norm)) {
-          await prefetchUrl(norm);
-          // 250ms spacing prevents starving server CPU / network
-          await new Promise(r => setTimeout(r, 250));
-        }
-      }
-      warmupActive = false;
-    }
-
-    async function prefetchUrl(url) {
-      const norm = getNormalizedUrl(url);
-      if (!norm || cache.has(norm) || prefetchQueue.has(norm)) return;
-      prefetchQueue.add(norm);
-
-      try {
-        const resp = await fetch(norm, {
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        });
-
-        if (resp.ok) {
-          const htmlText = await resp.text();
-          const pageData = parsePageResponse(htmlText);
-          if (pageData) {
-            setToCache(norm, pageData);
-          }
-        }
-      } catch(e) {
-      } finally {
-        prefetchQueue.delete(norm);
-      }
-    }
-
-    function parsePageResponse(htmlText) {
-      try {
-        const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-        const mainEl = doc.getElementById('sp-real-content');
-        if (!mainEl) return null;
-
-        // Extract style tags from head
-        const styles = Array.from(doc.head.querySelectorAll('style'))
-          .map(s => s.outerHTML)
-          .join('\n');
-
-        const scriptEl = doc.getElementById('sp-page-scripts');
-
-        return {
-          title: doc.title || document.title,
-          html: mainEl.innerHTML,
-          styles: styles,
-          scripts: scriptEl ? scriptEl.innerHTML : '',
-          timestamp: Date.now()
-        };
-      } catch(e) {
-        return null;
-      }
-    }
-
-    function handlePointerDown(e) {
+    function handlePointerPrefetch(e) {
       const link = e.target.closest('a');
       if (!link) return;
       const href = link.getAttribute('href');
       if (!href) return;
       const norm = getNormalizedUrl(href);
-      if (norm && !cache.has(norm)) {
-        prefetchUrl(norm);
+      if (norm && !panes.has(norm)) {
+        mountPane(norm);
       }
     }
 
@@ -1651,12 +1516,12 @@
       const href = link.getAttribute('href');
       if (!href) return;
       const norm = getNormalizedUrl(href);
-      if (!norm || cache.has(norm)) return;
+      if (!norm || panes.has(norm)) return;
 
       clearTimeout(hoverTimeout);
       hoverTimeout = setTimeout(() => {
-        prefetchUrl(norm);
-      }, 40);
+        mountPane(norm);
+      }, 30);
     }
 
     function handleGlobalClick(e) {
@@ -1674,7 +1539,7 @@
       if (!norm) return;
 
       // Handle same page anchor scrolling
-      if (norm.split('#')[0] === getNormalizedUrl(window.location.href)?.split('#')[0] && href.includes('#')) {
+      if (norm === getNormalizedUrl(window.location.href) && href.includes('#')) {
         return;
       }
 
@@ -1683,93 +1548,154 @@
     }
 
     async function navigateTo(url, pushState = true) {
-      if (isNavigating) return;
-
-      // 1. 0ms INSTANT CACHE HIT (Immediate DOM Swap!)
-      const cached = getFromCache(url);
-      if (cached) {
-        renderPage(cached, url, pushState);
-        // Background silent revalidation for fresh stats
-        revalidateUrlInBackground(url);
+      const norm = getNormalizedUrl(url);
+      if (!norm) {
+        window.location.href = url;
         return;
       }
 
-      // 2. Cold navigation: Show slim top progress bar, DO NOT wipe out screen with grey skeleton!
-      isNavigating = true;
-      showProgressBar();
+      const container = document.getElementById('sp-views-container');
+      if (!container) {
+        window.location.href = url;
+        return;
+      }
 
-      try {
-        const resp = await fetch(url, {
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-          }
+      // ── 1. 0.0000ms INSTANT VIEW PANE SWAP ───────────────────────────────
+      let targetPane = panes.get(norm) || container.querySelector(`.sp-view-pane[data-url="${norm}"]`);
+      if (targetPane) {
+        // Hide all panes
+        container.querySelectorAll('.sp-view-pane').forEach(p => {
+          p.style.display = 'none';
         });
 
-        if (!resp.ok) {
-          window.location.href = url;
-          return;
+        // Show target pane in 0.00ms!
+        targetPane.style.display = 'block';
+
+        const title = targetPane.getAttribute('data-title');
+        if (title) document.title = title;
+
+        if (pushState) {
+          window.history.pushState({ url: norm }, '', norm);
         }
 
-        const htmlText = await resp.text();
-        const pageData = parsePageResponse(htmlText);
+        updateSidebarActiveState(norm);
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
 
-        if (!pageData) {
-          window.location.href = url;
-          return;
+        // Trigger custom navigation event
+        window.dispatchEvent(new CustomEvent('sp:navigated', { detail: { url: norm } }));
+        return;
+      }
+
+      // ── 2. Cold Navigation (first time mounting a dynamic sub-route) ──────
+      showProgressBar();
+      try {
+        const pane = await mountPane(norm);
+        if (pane) {
+          container.querySelectorAll('.sp-view-pane').forEach(p => { p.style.display = 'none'; });
+          pane.style.display = 'block';
+
+          const title = pane.getAttribute('data-title');
+          if (title) document.title = title;
+
+          if (pushState) {
+            window.history.pushState({ url: norm }, '', norm);
+          }
+
+          updateSidebarActiveState(norm);
+          window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+          window.dispatchEvent(new CustomEvent('sp:navigated', { detail: { url: norm } }));
+        } else {
+          window.location.href = norm;
         }
-
-        setToCache(url, pageData);
-        renderPage(pageData, url, pushState);
       } catch(err) {
-        console.error('InstantNav navigation fallback:', err);
-        window.location.href = url;
+        console.error('Navigation error:', err);
+        window.location.href = norm;
       } finally {
-        isNavigating = false;
         hideProgressBar();
       }
     }
 
-    function renderPage(pageData, url, pushState) {
-      const main = document.getElementById('sp-real-content');
-      if (!main) return;
+    const mountingPromises = new Map();
+    async function mountPane(normUrl) {
+      if (panes.has(normUrl)) return panes.get(normUrl);
+      if (mountingPromises.has(normUrl)) return mountingPromises.get(normUrl);
 
-      // 0ms Synchronous DOM Swap with REAL DATA
-      main.innerHTML = pageData.html;
-      document.title = pageData.title;
+      const promise = (async () => {
+        try {
+          const resp = await fetch(normUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          if (!resp.ok) return null;
 
-      // Update Page Styles if available
-      if (pageData.styles) {
-        let styleContainer = document.getElementById('sp-dynamic-styles');
-        if (!styleContainer) {
-          styleContainer = document.createElement('div');
-          styleContainer.id = 'sp-dynamic-styles';
-          document.head.appendChild(styleContainer);
+          const html = await resp.text();
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const content = doc.getElementById('sp-real-content');
+          if (!content) return null;
+
+          // Inject any new styles from the fetched view
+          doc.head.querySelectorAll('style').forEach(s => {
+            document.head.appendChild(s.cloneNode(true));
+          });
+
+          const container = document.getElementById('sp-views-container');
+          if (!container) return null;
+
+          // Create persistent hidden view pane
+          const pane = document.createElement('div');
+          pane.className = 'sp-view-pane';
+          pane.style.display = 'none';
+          pane.setAttribute('data-url', normUrl);
+          pane.setAttribute('data-title', doc.title || document.title);
+          pane.innerHTML = content.innerHTML;
+
+          container.appendChild(pane);
+          panes.set(normUrl, pane);
+
+          // Wire up scripts inside this view pane once
+          executePaneScripts(pane);
+
+          return pane;
+        } catch(e) {
+          return null;
+        } finally {
+          mountingPromises.delete(normUrl);
         }
-        styleContainer.innerHTML = pageData.styles;
+      })();
+
+      mountingPromises.set(normUrl, promise);
+      return promise;
+    }
+
+    async function premountCorePanes() {
+      const currentNorm = getNormalizedUrl(window.location.href);
+      for (const route of coreRoutes) {
+        if (route !== currentNorm && !panes.has(route)) {
+          await mountPane(route);
+          await new Promise(r => setTimeout(r, 60));
+        }
       }
+    }
 
-      if (pushState) {
-        window.history.pushState({ url }, '', url);
-      }
-
-      // Update active highlight in sidebar
-      updateSidebarActiveState(url);
-
-      // Scroll viewport to top
-      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-
-      // Execute scripts contained in the new view
-      executePageScripts(main);
-      if (pageData.scripts) {
-        executeRawScripts(pageData.scripts);
-      }
-
-      // Trigger standard lifecycle events
-      try {
-        document.dispatchEvent(new Event('DOMContentLoaded'));
-        window.dispatchEvent(new Event('load'));
-        window.dispatchEvent(new CustomEvent('sp:navigated', { detail: { url } }));
-      } catch(e) {}
+    function executePaneScripts(container) {
+      const scripts = container.querySelectorAll('script');
+      scripts.forEach(s => {
+        try {
+          if (s.src) {
+            if (!document.querySelector(`script[src="${s.src}"]`)) {
+              const newScript = document.createElement('script');
+              newScript.src = s.src;
+              newScript.async = false;
+              document.head.appendChild(newScript);
+            }
+          } else if (s.textContent && s.textContent.trim()) {
+            const newScript = document.createElement('script');
+            newScript.type = 'text/javascript';
+            newScript.text = s.textContent;
+            document.head.appendChild(newScript);
+            newScript.remove();
+          }
+        } catch(e) {
+          console.warn('Pane script execution error:', e);
+        }
+      });
     }
 
     function updateSidebarActiveState(url) {
@@ -1785,66 +1711,6 @@
           item.classList.remove('active');
         }
       });
-    }
-
-    function executePageScripts(container) {
-      const scripts = container.querySelectorAll('script');
-      scripts.forEach(oldScript => {
-        try {
-          if (oldScript.src) {
-            if (!document.querySelector(`script[src="${oldScript.src}"]`)) {
-              const newScript = document.createElement('script');
-              newScript.src = oldScript.src;
-              document.head.appendChild(newScript);
-            }
-          } else if (oldScript.textContent && oldScript.textContent.trim()) {
-            const fn = new Function(oldScript.textContent);
-            fn();
-          }
-        } catch(e) {
-          console.warn('[InstantNav] Page script notice:', e);
-        }
-      });
-    }
-
-    function executeRawScripts(htmlString) {
-      if (!htmlString) return;
-      try {
-        const temp = document.createElement('div');
-        temp.innerHTML = htmlString;
-        const scripts = temp.querySelectorAll('script');
-        scripts.forEach(oldScript => {
-          try {
-            if (oldScript.src) {
-              if (!document.querySelector(`script[src="${oldScript.src}"]`)) {
-                const newScript = document.createElement('script');
-                newScript.src = oldScript.src;
-                document.head.appendChild(newScript);
-              }
-            } else if (oldScript.textContent && oldScript.textContent.trim()) {
-              const fn = new Function(oldScript.textContent);
-              fn();
-            }
-          } catch(e) {
-            console.warn('[InstantNav] Raw script notice:', e);
-          }
-        });
-      } catch(e) {}
-    }
-
-    async function revalidateUrlInBackground(url) {
-      try {
-        const resp = await fetch(url, {
-          headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
-        if (resp.ok) {
-          const htmlText = await resp.text();
-          const pageData = parsePageResponse(htmlText);
-          if (pageData) {
-            setToCache(url, pageData);
-          }
-        }
-      } catch(e) {}
     }
 
     function handlePopState(e) {
@@ -1877,18 +1743,25 @@
       }
     }
 
-    return { init, navigateTo, prefetchUrl, getFromCache };
+    return { init, navigateTo, mountPane, panes };
+  })();
+
+  // Polyfill/shim DOMContentLoaded for dynamically mounted panes
+  (function() {
+    const _origAdd = document.addEventListener.bind(document);
+    document.addEventListener = function(type, listener, options) {
+      if (type === 'DOMContentLoaded' && document.readyState !== 'loading') {
+        setTimeout(listener, 0);
+        return;
+      }
+      return _origAdd(type, listener, options);
+    };
   })();
 
   document.addEventListener('DOMContentLoaded', () => {
     SpInstantNav.init();
   });
 </script>
-
-<div id="sp-page-scripts" style="display:none;">
-@yield('scripts')
-</div>
-@yield('scripts')
 </body>
 </html>
 

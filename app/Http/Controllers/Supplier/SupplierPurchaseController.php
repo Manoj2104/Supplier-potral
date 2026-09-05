@@ -539,6 +539,14 @@ class SupplierPurchaseController extends Controller
     }
 
     /**
+     * Stock Receiving alias
+     */
+    public function stockReceiving(Request $request)
+    {
+        return $this->receivingQueue($request);
+    }
+
+    /**
      * Receiving Queue Dashboard
      */
     public function receivingQueue(Request $request)
