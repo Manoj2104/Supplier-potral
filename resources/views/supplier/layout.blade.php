@@ -1787,7 +1787,11 @@
   document.addEventListener('DOMContentLoaded', () => {
     SpInstantNav.init();
     // ── Expose navigate globally so other pages can trigger instant 0ms navigation ──
-    window.SpInstantNav = { navigate: (url) => navigateTo(url, true) };
+    window.SpInstantNav = {
+      navigate: (url) => SpInstantNav.navigateTo(url, true),
+      mountPane: (url) => SpInstantNav.mountPane(url),
+      panes: SpInstantNav.panes
+    };
   });
 </script>
 </body>
