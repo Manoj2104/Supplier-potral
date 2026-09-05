@@ -78,6 +78,13 @@ class PurchaseAPIController extends AppBaseController
         $input = $request->all();
         $purchase = $this->purchaseRepository->storePurchase($input);
 
+        // ── Immediate Cloud Push: 100km দূরে irukka Computer B-க்கு 1-2 seconds-ல் data போகணும் ──
+        try {
+            \App\Services\CloudDatabaseSyncService::pushLocalToCloud();
+        } catch (\Throwable $e) {
+            // Offline-ஆ இருந்தா ok — next 5s auto-sync-ல் push aagum
+        }
+
         return new PurchaseResource($purchase);
     }
 
@@ -101,6 +108,11 @@ class PurchaseAPIController extends AppBaseController
     {
         $input = $request->all();
         $purchase = $this->purchaseRepository->updatePurchase($input, $id);
+
+        // ── Immediate Cloud Push on Update ──
+        try {
+            \App\Services\CloudDatabaseSyncService::pushLocalToCloud();
+        } catch (\Throwable $e) {}
 
         return new PurchaseResource($purchase);
     }

@@ -57,6 +57,9 @@ class SupplierPurchaseController extends Controller
         $portal     = $request->supplier_portal;
         $supplierId = $portal ? $portal->supplier_id : 1;
 
+        // ── Pull latest POs from Supabase Cloud (Computer A → Computer B sync) ──
+        try { \App\Services\CloudDatabaseSyncService::pullCloudToLocal(); } catch (\Throwable $e) {}
+
         $query = Purchase::where('supplier_id', $supplierId)
             ->with(['warehouse', 'purchaseItems.product']);
 

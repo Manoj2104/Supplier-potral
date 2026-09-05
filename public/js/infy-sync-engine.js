@@ -491,12 +491,13 @@
       // Master single pulse loop — handles sidebar badges, toasts & flags
       _startLoop('pulse', CONFIG.BASE_URL + '/pulse', _handlePulse);
 
-      // Periodic Background Bi-directional Cloud Database Sync (every 60s when active)
+      // Periodic Background Bi-directional Cloud Database Sync
+      // Every 5 seconds — so Computer B gets Computer A's data within ~5s!
       setInterval(function () {
         if (_cloudOnline && document.visibilityState !== 'hidden' && !_isSyncing) {
           triggerCloudSync(false);
         }
-      }, 60000);
+      }, 5000);
 
       // Listen for local mutations from BroadcastChannel or custom events to trigger instant cloud sync
       try {
