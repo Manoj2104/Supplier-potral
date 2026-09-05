@@ -295,6 +295,26 @@
     box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
   }
 
+  /* ── Cloud Sync Status Badge ─────────────────────────────────────────────── */
+  #sp-cloud-status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 20px;
+    background: #DCFCE7; border: 1px solid #86EFAC; color: #15803D;
+    font-size: 11.5px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s ease; white-space: nowrap; user-select: none;
+  }
+  #sp-cloud-status-badge:hover { background: #bbf7d0; border-color: #4ade80; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(21,128,61,0.15); }
+  #sp-cloud-status-badge.offline { background: #FFFBEB; border-color: #FDE68A; color: #B45309; }
+  #sp-cloud-status-badge.offline:hover { background: #FEF3C7; }
+  #sp-cloud-status-badge.syncing { background: #EFF6FF; border-color: #BFDBFE; color: #1D4ED8; animation: sp-badge-pulse 1s ease-in-out infinite; }
+  @keyframes sp-badge-pulse { 0%,100%{opacity:1}50%{opacity:0.7} }
+  .sp-cloud-dot { width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0;animation:sp-dot-glow 2s ease-in-out infinite; }
+  #sp-cloud-status-badge.offline .sp-cloud-dot { animation:none; }
+  #sp-cloud-status-badge.syncing .sp-cloud-dot { animation:sp-dot-glow 0.5s ease-in-out infinite; }
+  @keyframes sp-dot-glow { 0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(1.3)} }
+  #sp-cloud-spin { display:none;width:10px;height:10px;border:1.5px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin 0.6s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
   /* Header User Profile Pill */
   .sp-header-user-v2 {
     display: flex;
@@ -724,6 +744,15 @@
 
       <!-- Right Header Actions -->
       <div class="sp-header-right-v2">
+
+        <!-- 0. Cloud Sync Status Badge -->
+        <div id="sp-cloud-status-badge"
+             title="🟢 Connected to Cloud DB (Supabase). Local MySQL runs at 0.00ms. Click to force sync."
+             onclick="if(window.InfySyncEngine) InfySyncEngine.triggerCloudSync(true)">
+          <span class="sp-cloud-dot"></span>
+          <span id="sp-cloud-spin"></span>
+          <span id="sp-cloud-text">Cloud Synced</span>
+        </div>
 
         <!-- 1. Apps & Quick Launch Launcher -->
         <div class="dropdown">

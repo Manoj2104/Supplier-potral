@@ -618,24 +618,36 @@ document.addEventListener("DOMContentLoaded", function() {
   // Donut Chart for Warehouse Overview (Real DB Counts)
   const donutCanvas = document.getElementById('sp-wh-donut');
   if (donutCanvas) {
-    const totalCount = parseInt(donutCanvas.dataset.total || 4);
-    new Chart(donutCanvas.getContext('2d'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Active', 'Inactive', 'Maintenance', 'Closed'],
-        datasets: [{
-          data: [totalCount, 0, 0, 0],
-          backgroundColor: ['#10B981', '#EF4444', '#94A3B8', '#64748B'],
-          borderWidth: 0
-        }]
-      },
-      options: {
-        cutout: '76%',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: false } }
-      }
-    });
+    const renderDonut = function() {
+      if (typeof Chart === 'undefined') return;
+      const totalCount = parseInt(donutCanvas.dataset.total || 4);
+      new Chart(donutCanvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Active', 'Inactive', 'Maintenance', 'Closed'],
+          datasets: [{
+            data: [totalCount, 0, 0, 0],
+            backgroundColor: ['#10B981', '#EF4444', '#94A3B8', '#64748B'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          cutout: '76%',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } }
+        }
+      });
+    };
+
+    if (typeof Chart === 'undefined') {
+      const cdnScript = document.createElement('script');
+      cdnScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+      cdnScript.onload = renderDonut;
+      document.head.appendChild(cdnScript);
+    } else {
+      renderDonut();
+    }
   }
 
 });

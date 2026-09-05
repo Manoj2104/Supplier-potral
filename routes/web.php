@@ -356,9 +356,12 @@ Route::prefix('supplier')->name('supplier.')->group(function () {
         Route::post('/api/supplier/cartons', [\App\Http\Controllers\Supplier\LpnCartonController::class, 'store']);
         Route::delete('/api/supplier/cartons/{id}', [\App\Http\Controllers\Supplier\LpnCartonController::class, 'destroy']);
 
-        // Warehouse
+        // Warehouse & Stock Receiving
         Route::get('/warehouse', [SupplierPurchaseController::class, 'warehouse'])->name('warehouse');
         Route::get('/stock-receiving', [SupplierPurchaseController::class, 'stockReceiving'])->name('stock-receiving');
+        Route::get('/receiving', [SupplierPurchaseController::class, 'stockReceiving'])->name('receiving.index');
+        Route::get('/receiving/session/{id}', [SupplierPurchaseController::class, 'receivingSession'])->name('receiving.session');
+        Route::get('/stock-receiving/session/{id}', [SupplierPurchaseController::class, 'receivingSession']);
         Route::get('/grn', [SupplierPurchaseController::class, 'stockReceiving']);
 
         // Invoices & Documents
@@ -432,6 +435,7 @@ Route::prefix('api/supplier/sync')->group(function () {
     Route::get('/cartons',       [$ctrl, 'cartons']);        // LPN carton status delta
     Route::get('/notifications', [$ctrl, 'notifications']); // Notification delta
     Route::get('/shipments',     [$ctrl, 'shipments']);      // Shipment status delta
+    Route::get('/cloud-sync',    [$ctrl, 'cloudSync']);      // Offline-First Bi-directional Cloud Database Sync
     Route::post('/mark-read/{id}', [$ctrl, 'markNotifRead']); // Mark notification read
 });
 

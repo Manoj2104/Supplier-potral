@@ -94,8 +94,11 @@ class RealtimeApiController extends Controller
             ->where('created_at', '>=', $since)
             ->exists();
 
+        $cloudOnline = \App\Services\CloudDatabaseSyncService::isCloudReachable();
+
         return response()->json([
             'success'       => true,
+            'cloud_online'  => $cloudOnline,
             'last_sync'     => now()->timestamp,
             'changed'       => $cartonChanged || $asnChanged || $newPo || $latestNotif,
             'counts'        => [
@@ -125,6 +128,15 @@ class RealtimeApiController extends Controller
                 'time'    => $latestNotif->created_at->diffForHumans(),
             ] : null,
         ]);
+    }
+
+    /**
+     * Trigger Background Bi-directional Cloud Database Sync
+     */
+    public function cloudSync(Request $request)
+    {
+        $res = \App\Services\CloudDatabaseSyncService::syncAll();
+        return response()->json($res);
     }
 
     // ─── PO Delta ─────────────────────────────────────────────────────────────

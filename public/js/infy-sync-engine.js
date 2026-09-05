@@ -303,6 +303,11 @@
       }
     }
 
+    // Cloud Database Status Check
+    if (typeof data.cloud_online !== 'undefined') {
+      _updateCloudStatus(data.cloud_online);
+    }
+
     // Module-level refresh hints
     if (data.flags) {
       if (data.flags.carton_changed) {
@@ -315,6 +320,101 @@
         document.dispatchEvent(new CustomEvent('infy:pos-changed'));
         toast('📋 New Purchase Order assigned to your account!', 'info');
       }
+    }
+  }
+
+  // ── Cloud Database Hybrid Sync Engine ─────────────────────────────────────────
+  let _cloudOnline = true;
+  let _isSyncing = false;
+
+  function _updateCloudStatus(isOnline) {
+    const badge = document.getElementById('sp-cloud-status-badge');
+    const text = document.getElementById('sp-cloud-text');
+    if (!badge || !text) return;
+
+    const wasOffline = !_cloudOnline;
+    _cloudOnline = !!isOnline;
+
+    if (_isSyncing) return;
+
+    if (_cloudOnline) {
+      badge.classList.remove('offline');
+      badge.classList.remove('syncing');
+      badge.title = '🟢 Connected to Cloud DB (Supabase). Local MySQL runs at 0.00ms. Click to force sync.';
+      text.innerText = 'Cloud Synced';
+      if (wasOffline) {
+        toast('🌐 Internet reconnected! Cloud Database synced.', 'success');
+        triggerCloudSync(false);
+      }
+    } else {
+      badge.classList.add('offline');
+      badge.classList.remove('syncing');
+      badge.title = '🟡 Offline Mode: Local MySQL database running (0.00ms). Changes will auto-sync when online.';
+      text.innerText = 'Offline Mode (Local DB)';
+    }
+  }
+
+  async function triggerCloudSync(showToast = false) {
+    if (_isSyncing) return;
+    _isSyncing = true;
+
+    const badge = document.getElementById('sp-cloud-status-badge');
+    const spinner = document.getElementById('sp-cloud-spin');
+    const text = document.getElementById('sp-cloud-text');
+
+    if (badge) badge.classList.add('syncing');
+    if (spinner) spinner.style.display = 'inline-block';
+    if (text) text.innerText = 'Syncing...';
+
+    try {
+      const resp = await fetch(CONFIG.BASE_URL + '/cloud-sync', {
+        headers: {
+          'X-CSRF-TOKEN': _csrfToken(),
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        }
+      });
+      const res = await resp.json();
+
+      if (res.online) {
+        _cloudOnline = true;
+        if (badge) {
+          badge.classList.remove('offline');
+          badge.classList.remove('syncing');
+        }
+        if (text) text.innerText = 'Cloud Synced';
+        const totalSynced = (res.pushed?.pushed_purchases || 0) + (res.pushed?.pushed_asns || 0) + (res.pushed?.pushed_cartons || 0) + (res.pulled?.pulled_purchases || 0) + (res.pulled?.pulled_asns || 0);
+        if (showToast) {
+          if (totalSynced > 0) {
+            toast(`✅ Cloud DB Sync Complete (${totalSynced} records updated)`, 'success');
+          } else {
+            toast('✅ Local MySQL & Cloud DB are 100% in sync!', 'success');
+          }
+        }
+      } else {
+        _cloudOnline = false;
+        if (badge) {
+          badge.classList.add('offline');
+          badge.classList.remove('syncing');
+        }
+        if (text) text.innerText = 'Offline Mode (Local DB)';
+        if (showToast) {
+          toast('⚠️ Cloud DB unreachable. All data safely kept in Local MySQL.', 'warning');
+        }
+      }
+    } catch (err) {
+      _cloudOnline = false;
+      if (badge) {
+        badge.classList.add('offline');
+        badge.classList.remove('syncing');
+      }
+      if (text) text.innerText = 'Offline Mode (Local DB)';
+      if (showToast) {
+        toast('⚠️ Offline Mode active (Local DB 0ms)', 'warning');
+      }
+    } finally {
+      _isSyncing = false;
+      if (spinner) spinner.style.display = 'none';
     }
   }
 
@@ -391,6 +491,25 @@
       // Master single pulse loop — handles sidebar badges, toasts & flags
       _startLoop('pulse', CONFIG.BASE_URL + '/pulse', _handlePulse);
 
+      // Periodic Background Bi-directional Cloud Database Sync (every 60s when active)
+      setInterval(function () {
+        if (_cloudOnline && document.visibilityState !== 'hidden' && !_isSyncing) {
+          triggerCloudSync(false);
+        }
+      }, 60000);
+
+      // Listen for local mutations from BroadcastChannel or custom events to trigger instant cloud sync
+      try {
+        if (window.BroadcastChannel) {
+          const bc = new BroadcastChannel('infypos_realtime_bus');
+          bc.onmessage = function (ev) {
+            if (ev.data && (ev.data.type === 'purchase' || ev.data.type === 'asn' || ev.data.type === 'carton')) {
+              setTimeout(() => { if (!_isSyncing) triggerCloudSync(false); }, 1000);
+            }
+          };
+        }
+      } catch (e) {}
+
       // Adaptive interval on visibility change
       document.addEventListener('visibilitychange', function () {
         // Restart all loops with new interval on visibility change
@@ -411,12 +530,14 @@
       else { Object.keys(_state.loops).forEach(_stopLoop); }
     },
 
-    toast:        toast,
-    globalSearch: globalSearch,
-    debounce:     debounce,
-    updateBadge:  _updateBadge,
-    getLastSync:  function () { return _state.lastSync; },
-    isConnected:  function () { return _state.connected; },
+    toast:            toast,
+    globalSearch:     globalSearch,
+    debounce:         debounce,
+    updateBadge:      _updateBadge,
+    triggerCloudSync: triggerCloudSync,
+    getLastSync:      function () { return _state.lastSync; },
+    isConnected:      function () { return _state.connected; },
+    isCloudOnline:    function () { return _cloudOnline; },
   };
 
   window.InfySyncEngine = InfySyncEngine;

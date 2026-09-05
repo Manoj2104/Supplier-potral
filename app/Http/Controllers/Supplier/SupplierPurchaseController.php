@@ -574,7 +574,7 @@ class SupplierPurchaseController extends Controller
     public function receivingQueue(Request $request)
     {
         $portal     = $request->supplier_portal;
-        $supplierId = $portal->supplier_id;
+        $supplierId = $portal ? $portal->supplier_id : 1;
 
         $asns = SupplierAsn::where('supplier_id', $supplierId)
             ->with(['purchase.warehouse', 'supplier'])
@@ -593,7 +593,7 @@ class SupplierPurchaseController extends Controller
     public function receivingSession(Request $request, $id)
     {
         $portal     = $request->supplier_portal;
-        $supplierId = $portal->supplier_id;
+        $supplierId = $portal ? $portal->supplier_id : 1;
 
         $asn = SupplierAsn::where('supplier_id', $supplierId)
             ->where('id', $id)
