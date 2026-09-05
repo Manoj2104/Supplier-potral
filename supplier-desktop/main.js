@@ -4,6 +4,22 @@ const http = require("http");
 const { spawn } = require("child_process");
 const fs = require("fs");
 
+const logFile = path.join(app.getPath("userData"), "startup.log");
+function log(msg) {
+  try {
+    fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch(e) {}
+}
+
+process.on("uncaughtException", (err) => {
+  log(`Uncaught exception: ${err.stack || err}`);
+});
+process.on("unhandledRejection", (reason) => {
+  log(`Unhandled rejection: ${reason}`);
+});
+
+log("App starting...");
+
 const LOCAL_URL = "http://127.0.0.1:8000/supplier/login";
 const CLOUD_URL = "https://supplier-potral.onrender.com/supplier/login";
 
@@ -38,7 +54,24 @@ function ensureLocalServer() {
   const xamppPhp = "C:\\xampp\\php\\php.exe";
   const posDir = "C:\\xampp\\htdocs\\pos";
   const serverPhp = path.join(posDir, "server.php");
+  const xamppMysql = "C:\\xampp\\mysql\\bin\\mysqld.exe";
+  const myIni = "C:\\xampp\\mysql\\bin\\my.ini";
 
+  // Auto-launch XAMPP MySQL if present
+  if (fs.existsSync(xamppMysql) && fs.existsSync(myIni)) {
+    try {
+      const mysqlChild = spawn(xamppMysql, ["--defaults-file=" + myIni, "--standalone"], {
+        detached: true,
+        stdio: "ignore",
+      });
+      mysqlChild.unref();
+      log("XAMPP MySQL service ensured");
+    } catch(e) {
+      log("Failed to spawn MySQL: " + e);
+    }
+  }
+
+  // Auto-launch Local PHP Server
   if (fs.existsSync(xamppPhp) && fs.existsSync(serverPhp)) {
     try {
       const child = spawn(xamppPhp, ["-S", "127.0.0.1:8000", "server.php"], {
@@ -47,7 +80,10 @@ function ensureLocalServer() {
         stdio: "ignore",
       });
       child.unref();
-    } catch(e) {}
+      log("Local PHP server ensured");
+    } catch(e) {
+      log("Failed to spawn PHP: " + e);
+    }
   }
 }
 
@@ -73,7 +109,8 @@ async function resolveStartupUrl() {
   return CLOUD_URL;
 }
 
-async function createWindow() {
+function createWindow() {
+  log("createWindow called");
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -86,25 +123,27 @@ async function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
     },
-    show: true, // Visible immediately
+    show: true,
     backgroundColor: "#1a7c4f",
     autoHideMenuBar: true,
   });
 
   Menu.setApplicationMenu(null);
 
-  const startUrl = await resolveStartupUrl();
-  mainWindow.loadURL(startUrl);
-
-  mainWindow.once("ready-to-show", () => {
-    mainWindow.show();
-    mainWindow.focus();
-  });
-
   mainWindow.webContents.on("did-navigate", (_, url) => {
     const isLocal = url.includes("127.0.0.1") || url.includes("localhost");
     const mode = isLocal ? "⚡ Localhost 0ms" : "☁️ Cloud";
     mainWindow.setTitle(`INFY-POS Supplier Portal [${mode}]`);
+    log(`Navigated to: ${url} [${mode}]`);
+  });
+
+  mainWindow.webContents.on("did-fail-load", (_, errorCode, errorDesc, validatedURL) => {
+    log(`did-fail-load: ${errorCode} ${errorDesc} ${validatedURL}`);
+    if (activeUrl === LOCAL_URL) {
+      log("Falling back to Cloud URL after load failure");
+      activeUrl = CLOUD_URL;
+      mainWindow.loadURL(CLOUD_URL);
+    }
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -113,7 +152,20 @@ async function createWindow() {
   });
 
   mainWindow.on("closed", () => {
+    log("mainWindow closed");
     mainWindow = null;
+  });
+
+  resolveStartupUrl().then((startUrl) => {
+    log(`Loading resolved URL: ${startUrl}`);
+    if (mainWindow) {
+      mainWindow.loadURL(startUrl);
+    }
+  }).catch((err) => {
+    log(`resolveStartupUrl error: ${err}`);
+    if (mainWindow) {
+      mainWindow.loadURL(CLOUD_URL);
+    }
   });
 }
 
@@ -133,10 +185,13 @@ function createTray() {
       tray.setContextMenu(contextMenu);
       tray.on("double-click", () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } else { createWindow(); } });
     }
-  } catch(e) {}
+  } catch(e) {
+    log(`Tray creation error: ${e}`);
+  }
 }
 
 app.whenReady().then(() => {
+  log("app.whenReady fired");
   createWindow();
   createTray();
 
@@ -146,6 +201,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  log("window-all-closed fired");
   app.quit();
 });
 
