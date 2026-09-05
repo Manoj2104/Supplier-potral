@@ -469,10 +469,10 @@
           <i class="bi bi-hourglass-split"></i>
         </div>
       </div>
-      <div class="sp-kpi-num" style="color: {{ $pendingPosCount > 0 ? '#D97706' : '#0F172A' }};">
+      <div class="sp-kpi-num" id="kpi-pending-count" style="color: {{ $pendingPosCount > 0 ? '#D97706' : '#0F172A' }};">
         {{ $pendingPosCount }}
       </div>
-      <div class="sp-kpi-subtext" style="color: {{ $pendingPosCount > 0 ? '#B45309' : '#64748B' }};">
+      <div class="sp-kpi-subtext" id="kpi-pending-subtext" style="color: {{ $pendingPosCount > 0 ? '#B45309' : '#64748B' }};">
         @if($pendingPosCount > 0)
           ⚡ Action Required
         @else
@@ -489,7 +489,7 @@
           <i class="bi bi-check2-circle"></i>
         </div>
       </div>
-      <div class="sp-kpi-num">{{ $approvedCount }}</div>
+      <div class="sp-kpi-num" id="kpi-approved-count">{{ $approvedCount }}</div>
       <div class="sp-kpi-subtext" style="color:#15803D;">
         Accepted by supplier
       </div>
@@ -551,10 +551,10 @@
 
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <select class="sp-select-dropdown" id="statusFilter" onchange="window.location.href='{{ route('supplier.my-approvals') }}?tab=' + this.value">
-          <option value="pending" {{ $tab === 'pending' ? 'selected' : '' }}>Status: Pending Review ({{ $counts['pending'] }})</option>
-          <option value="approved" {{ $tab === 'approved' ? 'selected' : '' }}>Status: Approved ({{ $counts['approved'] }})</option>
+          <option value="pending" id="filter-opt-pending" {{ $tab === 'pending' ? 'selected' : '' }}>Status: Pending Review ({{ $counts['pending'] }})</option>
+          <option value="approved" id="filter-opt-approved" {{ $tab === 'approved' ? 'selected' : '' }}>Status: Approved ({{ $counts['approved'] }})</option>
           <option value="rejected" {{ $tab === 'rejected' ? 'selected' : '' }}>Status: Rejected ({{ $counts['rejected'] }})</option>
-          <option value="all" {{ $tab === 'all' ? 'selected' : '' }}>Status: All ({{ $counts['all'] }})</option>
+          <option value="all" id="filter-opt-all" {{ $tab === 'all' ? 'selected' : '' }}>Status: All ({{ $counts['all'] }})</option>
         </select>
 
         <a href="{{ route('supplier.my-approvals') }}" class="sp-btn-pill" style="height:44px; padding:0 16px;">
@@ -752,7 +752,7 @@
 
     <!-- Pagination -->
     <div style="margin-top:18px; padding-top:14px; border-top:1px solid #F1F5F9; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-      <div style="font-size:12.5px; color:#64748B; font-weight:600;">
+      <div id="showing-count-text" style="font-size:12.5px; color:#64748B; font-weight:600;">
         Showing {{ $approvals->count() }} of {{ $approvals->total() }} purchase orders
       </div>
       <div>
@@ -1113,19 +1113,82 @@ window.executeFulfillAndRedirect = async function() {
 
     const data = await res.json();
     if (data && data.success) {
-      // Update local poDataStore so drawer won't show fulfillment again
+      // ── Update local poDataStore ──
       if (window.poDataStore && window.poDataStore[id]) {
         window.poDataStore[id].isPending = false;
         window.poDataStore[id].status = 1;
       }
-      // ── Use SpInstantNav for 0ms navigation (no full page reload!) ──
-      const targetUrl = data.redirect_url || ("/supplier/asn/create/" + id);
-      closeApprovalDrawer();
-      if (window.SpInstantNav && window.SpInstantNav.navigate) {
-        window.SpInstantNav.navigate(targetUrl);
-      } else {
-        window.location.href = targetUrl;
+
+      // ── INSTANT DOM UPDATE: Remove row + update all counters WITHOUT page reload ──
+      const _getEl = (elId) => {
+        const pane = document.querySelector('.sp-view-pane[style*="display: block"], .sp-view-pane[style*="display:block"]');
+        return (pane && pane.querySelector('#' + elId)) || document.getElementById(elId);
+      };
+
+      // 1. Animate row out then remove it
+      const row = document.getElementById('po-row-' + id);
+      if (row) {
+        row.style.transition = 'all 0.3s ease';
+        row.style.background = '#DCFCE7';
+        row.style.opacity = '0';
+        row.style.transform = 'translateX(20px)';
+        setTimeout(() => {
+          row.remove();
+          // Update "Showing X purchase orders" text
+          const remainingRows = document.querySelectorAll('.po-data-row');
+          const showingEl = _getEl('showing-count-text');
+          if (showingEl) showingEl.textContent = `Showing ${remainingRows.length} purchase orders`;
+        }, 300);
       }
+
+      // 2. Update KPI: Pending count -1
+      const kpiPending = _getEl('kpi-pending-count');
+      if (kpiPending) {
+        const cur = parseInt(kpiPending.textContent) || 0;
+        const newVal = Math.max(0, cur - 1);
+        kpiPending.textContent = newVal;
+        kpiPending.style.color = newVal > 0 ? '#D97706' : '#0F172A';
+        const sub = _getEl('kpi-pending-subtext');
+        if (sub) {
+          sub.textContent = newVal > 0 ? '⚡ Action Required' : '✓ All reviewed';
+          sub.style.color = newVal > 0 ? '#B45309' : '#64748B';
+        }
+        // Update filter dropdown pending count
+        const filterPending = _getEl('filter-opt-pending');
+        if (filterPending) filterPending.textContent = `Status: Pending Review (${newVal})`;
+      }
+
+      // 3. Update KPI: Approved count +1
+      const kpiApproved = _getEl('kpi-approved-count');
+      if (kpiApproved) {
+        const cur2 = parseInt(kpiApproved.textContent) || 0;
+        kpiApproved.textContent = cur2 + 1;
+        const filterApproved = _getEl('filter-opt-approved');
+        if (filterApproved) filterApproved.textContent = `Status: Approved (${cur2 + 1})`;
+      }
+
+      // 4. Update sidebar "My Approvals" badge count
+      const sidebarBadges = document.querySelectorAll('a[href*="my-approvals"] .badge, a[href*="my-approvals"] .sp-sidebar-badge');
+      sidebarBadges.forEach(badge => {
+        const cur3 = parseInt(badge.textContent) || 0;
+        const newBadge = Math.max(0, cur3 - 1);
+        badge.textContent = newBadge;
+        if (newBadge === 0) badge.style.display = 'none';
+      });
+
+      // 5. Close drawer with success flash
+      closeApprovalDrawer();
+
+      // 6. Navigate to ASN create page using SpInstantNav (0ms!)
+      const targetUrl = data.redirect_url || ("/supplier/asn/create/" + id);
+      setTimeout(() => {
+        if (window.SpInstantNav && window.SpInstantNav.navigate) {
+          window.SpInstantNav.navigate(targetUrl);
+        } else {
+          window.location.href = targetUrl;
+        }
+      }, 320); // wait for row remove animation
+
     } else {
       alert("Error: " + ((data && data.message) || "Failed to accept purchase order."));
       if (btn) {
