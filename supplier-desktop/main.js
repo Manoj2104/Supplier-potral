@@ -88,23 +88,32 @@ function ensureLocalServer() {
 }
 
 async function resolveStartupUrl() {
+  const xamppExists = fs.existsSync("C:\\xampp\\php\\php.exe");
+
   // 1. Check if Localhost 8000 is already active
-  let isLocal = await checkUrl(LOCAL_URL, 600);
+  let isLocal = await checkUrl(LOCAL_URL, 1500);
   if (isLocal) {
     activeUrl = LOCAL_URL;
+    log("Direct Localhost hit: " + LOCAL_URL);
     return LOCAL_URL;
   }
 
-  // 2. Try launching local PHP server if on local dev machine
-  ensureLocalServer();
-  await new Promise(r => setTimeout(r, 600));
-  isLocal = await checkUrl(LOCAL_URL, 800);
-  if (isLocal) {
-    activeUrl = LOCAL_URL;
-    return LOCAL_URL;
+  // 2. If XAMPP exists locally, ensure local services and retry
+  if (xamppExists) {
+    ensureLocalServer();
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      await new Promise(r => setTimeout(r, 800));
+      isLocal = await checkUrl(LOCAL_URL, 1500);
+      if (isLocal) {
+        activeUrl = LOCAL_URL;
+        log(`Localhost hit after attempt ${attempt}: ${LOCAL_URL}`);
+        return LOCAL_URL;
+      }
+    }
   }
 
-  // 3. Fallback to Cloud (Render)
+  // 3. Fallback to Cloud (Render) only if no local XAMPP or local server couldn't start
+  log("Localhost unavailable, falling back to Cloud: " + CLOUD_URL);
   activeUrl = CLOUD_URL;
   return CLOUD_URL;
 }
@@ -139,8 +148,11 @@ function createWindow() {
 
   mainWindow.webContents.on("did-fail-load", (_, errorCode, errorDesc, validatedURL) => {
     log(`did-fail-load: ${errorCode} ${errorDesc} ${validatedURL}`);
-    if (activeUrl === LOCAL_URL) {
-      log("Falling back to Cloud URL after load failure");
+    // Ignore normal aborted requests (e.g. user navigation, redirects)
+    if (errorCode === -3) return;
+
+    if (activeUrl === LOCAL_URL && !fs.existsSync("C:\\xampp\\php\\php.exe")) {
+      log("Falling back to Cloud URL after non-abort load failure");
       activeUrl = CLOUD_URL;
       mainWindow.loadURL(CLOUD_URL);
     }
