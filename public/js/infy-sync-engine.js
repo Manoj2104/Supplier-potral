@@ -354,7 +354,8 @@
     }
   }
 
-  async function triggerCloudSync(showToast = false) {
+  // showToast=true → manual click, showUI=true → show badge animation (silent by default for auto-sync)
+  async function triggerCloudSync(showToast = false, showUI = false) {
     if (_isSyncing) return;
     _isSyncing = true;
 
@@ -362,9 +363,12 @@
     const spinner = document.getElementById('sp-cloud-spin');
     const text = document.getElementById('sp-cloud-text');
 
-    if (badge) badge.classList.add('syncing');
-    if (spinner) spinner.style.display = 'inline-block';
-    if (text) text.innerText = 'Syncing...';
+    // Only show "Syncing..." animation when user manually clicks (showUI=true)
+    if (showUI) {
+      if (badge) badge.classList.add('syncing');
+      if (spinner) spinner.style.display = 'inline-block';
+      if (text) text.innerText = 'Syncing...';
+    }
 
     try {
       const resp = await fetch(CONFIG.BASE_URL + '/cloud-sync', {
@@ -390,6 +394,10 @@
           } else {
             toast('✅ Local MySQL & Cloud DB are 100% in sync!', 'success');
           }
+        }
+        // If new data pulled (other computer pushed), refresh page badges silently
+        if (totalSynced > 0 && !showToast) {
+          document.dispatchEvent(new CustomEvent('infy:cloud-data-updated', { detail: res }));
         }
       } else {
         _cloudOnline = false;

@@ -745,10 +745,10 @@
       <!-- Right Header Actions -->
       <div class="sp-header-right-v2">
 
-        <!-- 0. Cloud Sync Status Badge -->
+        <!-- 0. Cloud Sync Status Badge (click = manual force sync with animation) -->
         <div id="sp-cloud-status-badge"
              title="🟢 Connected to Cloud DB (Supabase). Local MySQL runs at 0.00ms. Click to force sync."
-             onclick="if(window.InfySyncEngine) InfySyncEngine.triggerCloudSync(true)">
+             onclick="if(window.InfySyncEngine) InfySyncEngine.triggerCloudSync(true, true)">
           <span class="sp-cloud-dot"></span>
           <span id="sp-cloud-spin"></span>
           <span id="sp-cloud-text">Cloud Synced</span>
@@ -1695,12 +1695,9 @@
 
     async function premountCorePanes() {
       const currentNorm = getNormalizedUrl(window.location.href);
-      for (const route of coreRoutes) {
-        if (route !== currentNorm && !panes.has(route)) {
-          await mountPane(route);
-          await new Promise(r => setTimeout(r, 60));
-        }
-      }
+      // ── Parallel prefetch all core panes — faster preloading! ──
+      const toMount = coreRoutes.filter(r => r !== currentNorm && !panes.has(r));
+      await Promise.allSettled(toMount.map(route => mountPane(route)));
     }
 
     function executePaneScripts(container) {

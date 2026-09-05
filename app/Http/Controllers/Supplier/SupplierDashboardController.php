@@ -203,7 +203,8 @@ class SupplierDashboardController extends Controller
     }
 
     /**
-     * Blade View Render (Instant SSR with Real DB Data)
+     * Blade View Render — INSTANT 0ms from Local MySQL only.
+     * Cloud sync happens in JS background (non-blocking).
      */
     public function index(Request $request)
     {
@@ -211,17 +212,10 @@ class SupplierDashboardController extends Controller
         $supplierId = $portal ? $portal->supplier_id : 1;
         $supplierInfo = $portal && $portal->supplier ? $portal->supplier : (Supplier::find($supplierId) ?? (object)['name' => 'Jeyachandran Textile Private Limited']);
 
-        // ── Background Cloud Pull: Computer A la Admin PO create panna, Computer B-ல் auto vanthu sera ──
-        // Dashboard load ஆகும்போதே latest cloud data pull பண்ணு (non-blocking)
-        try {
-            \App\Services\CloudDatabaseSyncService::pullCloudToLocal();
-            Cache::forget("supplier_dashboard_{$supplierId}"); // Refresh cache after pull
-        } catch (\Throwable $e) {
-            // Offline-ஆ இருந்தா — Local MySQL data use பண்ணு
-        }
-
+        // ── Local MySQL ONLY — instant 0ms render ──
+        // Cloud sync runs in JS every 5s (non-blocking background)
         $cacheKey = "supplier_dashboard_{$supplierId}";
-        $data = Cache::remember($cacheKey, 60, fn() => $this->getAggregatedData($supplierId));
+        $data = Cache::remember($cacheKey, 15, fn() => $this->getAggregatedData($supplierId));
 
         return view('supplier.dashboard', array_merge($data, [
             'portal'       => $portal,
