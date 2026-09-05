@@ -537,6 +537,35 @@
 @endsection
 
 @section('content')
+@php
+    $stats = $stats ?? [
+        'total_pos' => 0, 'pending_pos' => 0, 'accepted_pos' => 0, 'rejected_pos' => 0,
+        'total_value' => 0, 'pending_value' => 0, 'accepted_value' => 0,
+        'on_time_delivery_rate' => 100, 'quality_rating' => 5.0,
+    ];
+    $asnStats = $asnStats ?? [
+        'total' => 0, 'draft' => 0, 'dispatched' => 0, 'in_transit' => 0, 'received' => 0,
+    ];
+    $invoiceStats = $invoiceStats ?? [
+        'total' => 0, 'pending' => 0, 'paid' => 0,
+        'total_billed' => 0, 'total_paid' => 0, 'outstanding' => 0,
+    ];
+    $performance = $performance ?? [
+        'sla_compliance' => 100, 'avg_dispatch_hrs' => 24,
+        'acceptance_rate' => 100, 'rejection_rate' => 0,
+    ];
+    $actionRequired = $actionRequired ?? [];
+    $topProducts = $topProducts ?? [];
+    $recentPos = $recentPos ?? [];
+    $notifications = $notifications ?? [];
+    $unreadCount = $unreadCount ?? 0;
+    $monthlyData = $monthlyData ?? ['months' => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], 'purchases' => [0,0,0,0,0,0,0,0,0,0,0,0], 'sales' => [0,0,0,0,0,0,0,0,0,0,0,0]];
+    $monthlyAsnData = $monthlyAsnData ?? ['months' => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], 'asns' => [0,0,0,0,0,0,0,0,0,0,0,0]];
+    $weeklyDays = $weeklyDays ?? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    $weeklyPurchases = $weeklyPurchases ?? [0,0,0,0,0,0,0];
+    $weeklySales = $weeklySales ?? [0,0,0,0,0,0,0];
+    $sidebarCounts = $sidebarCounts ?? [];
+@endphp
 <div class="dashboard-page premium-workspace">
 
     <!-- ═══════════════════════════════════════════════════════════════════
@@ -625,7 +654,7 @@
                 <span class="kpi-badge badge-neutral">0%</span>
             </div>
             <div>
-                <div class="kpi-val" id="kpi-asn-dispatched-val">{{ $asnStats['dispatched'] + $asnStats['in_transit'] }}</div>
+                <div class="kpi-val" id="kpi-asn-dispatched-val">{{ ($asnStats['dispatched'] ?? 0) + ($asnStats['in_transit'] ?? 0) }}</div>
                 <div class="kpi-sub">vs last month</div>
             </div>
             <div class="kpi-progress-bar">
@@ -647,7 +676,7 @@
                 <span class="kpi-badge badge-green">▲ 100%</span>
             </div>
             <div>
-                <div class="kpi-val" id="kpi-in-transit-val">{{ $asnStats['in_transit'] ?: ($stats['pending_pos'] > 0 ? $stats['pending_pos'] : 0) }}</div>
+                <div class="kpi-val" id="kpi-in-transit-val">{{ ($asnStats['in_transit'] ?? 0) ?: (($stats['pending_pos'] ?? 0) > 0 ? $stats['pending_pos'] : 0) }}</div>
                 <div class="kpi-sub">vs last month</div>
             </div>
             <svg class="kpi-sparkline-svg" viewBox="0 0 100 28" preserveAspectRatio="none">
@@ -1143,6 +1172,8 @@ document.addEventListener("DOMContentLoaded", function() {
     // ── 1. Initialize Chart with Real Backend Series ─────────────────────────
     const ctx = document.getElementById('sp-sales-overview-chart');
     if (ctx && typeof Chart !== 'undefined') {
+        const existing = Chart.getChart(ctx);
+        if (existing) existing.destroy();
         salesChartInstance = new Chart(ctx.getContext('2d'), {
             type: 'bar',
             data: {

@@ -1,25 +1,3 @@
-@if(request()->header('X-SP-Instant-Nav'))
-<!DOCTYPE html>
-<html>
-<head>
-  <title>@yield('title', 'Dashboard') — INFY-POS Supplier Portal</title>
-  <div id="sp-partial-head">@yield('head')</div>
-</head>
-<body>
-  <div id="sp-real-content">
-    @if(session('success'))
-      <div class="sp-alert sp-alert-success" style="margin-bottom:16px; background:#DCFCE7; border:1px solid #86EFAC; color:#15803D; padding:10px 14px; border-radius:8px; font-weight:700;">✅ {{ session('success') }}</div>
-    @endif
-    @if(session('error'))
-      <div class="sp-alert sp-alert-error" style="margin-bottom:16px; background:#FEE2E2; border:1px solid #FCA5A5; color:#B91C1C; padding:10px 14px; border-radius:8px; font-weight:700;">❌ {{ session('error') }}</div>
-    @endif
-    @yield('content')
-  </div>
-  <div id="sp-partial-scripts">@yield('scripts')</div>
-</body>
-</html>
-@php return; @endphp
-@endif
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1455,7 +1433,7 @@
   // ⚡ SP-INSTANT-NAV: 0ms ULTRA TURBO PERSISTENT SPA ENGINE
   // ══════════════════════════════════════════════════════════════════════════
   const SpInstantNav = (function() {
-    const CACHE_PREFIX = 'sp_snap_v1_';
+    const CACHE_PREFIX = 'sp_snap_v2_';
     const cache = new Map();
     const prefetchQueue = new Set();
     let isNavigating = false;
@@ -1479,24 +1457,36 @@
     ];
 
     function init() {
-      // 1. Hydrate memory cache from sessionStorage
+      // 1. Purge legacy v1 cache entries from sessionStorage
+      try {
+        const toRemove = [];
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith('sp_snap_v1_')) {
+            toRemove.push(key);
+          }
+        }
+        toRemove.forEach(k => sessionStorage.removeItem(k));
+      } catch(e) {}
+
+      // 2. Hydrate memory cache from sessionStorage
       hydrateCacheFromStorage();
 
-      // 2. Save current initial page snapshot immediately
+      // 3. Save current initial page snapshot immediately
       saveCurrentPageToCache();
 
-      // 3. Fast Pointerdown Preloader (fires 100ms before click)
+      // 4. Fast Pointerdown Preloader (fires 100ms before click)
       document.addEventListener('pointerdown', handlePointerDown, { passive: true });
       document.addEventListener('mouseover', handleHoverPrefetch, { passive: true });
       document.addEventListener('touchstart', handleHoverPrefetch, { passive: true });
 
-      // 4. Intercept all internal navigation clicks for 0ms swap
+      // 5. Intercept all internal navigation clicks for 0ms swap
       document.addEventListener('click', handleGlobalClick, true);
 
-      // 5. Browser Back & Forward popstate handling
+      // 6. Browser Back & Forward popstate handling
       window.addEventListener('popstate', handlePopState);
 
-      // 6. Sequential gentle warmup after main UI is fully idle
+      // 7. Sequential gentle warmup after main UI is fully idle
       setTimeout(() => {
         startSequentialWarmup();
       }, 500);
@@ -1558,7 +1548,7 @@
 
     function saveCurrentPageToCache() {
       const main = document.getElementById('sp-real-content');
-      if (!main) return;
+      if (!main || !main.innerHTML || main.innerHTML.trim().length < 50) return;
       const normUrl = getNormalizedUrl(window.location.href);
       if (!normUrl) return;
 
@@ -1601,8 +1591,7 @@
       try {
         const resp = await fetch(norm, {
           headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-SP-Instant-Nav': '1'
+            'X-Requested-With': 'XMLHttpRequest'
           }
         });
 
@@ -1625,13 +1614,17 @@
         const mainEl = doc.getElementById('sp-real-content');
         if (!mainEl) return null;
 
-        const headEl = doc.getElementById('sp-partial-head');
-        const scriptEl = doc.getElementById('sp-partial-scripts');
+        // Extract style tags from head
+        const styles = Array.from(doc.head.querySelectorAll('style'))
+          .map(s => s.outerHTML)
+          .join('\n');
+
+        const scriptEl = doc.getElementById('sp-page-scripts');
 
         return {
           title: doc.title || document.title,
           html: mainEl.innerHTML,
-          styles: headEl ? headEl.innerHTML : '',
+          styles: styles,
           scripts: scriptEl ? scriptEl.innerHTML : '',
           timestamp: Date.now()
         };
@@ -1690,6 +1683,8 @@
     }
 
     async function navigateTo(url, pushState = true) {
+      if (isNavigating) return;
+
       // 1. 0ms INSTANT CACHE HIT (Immediate DOM Swap!)
       const cached = getFromCache(url);
       if (cached) {
@@ -1699,15 +1694,14 @@
         return;
       }
 
-      // 2. Cold navigation fallback with INSTANT 0ms Skeleton feedback
-      showSkeletonLoading(url);
+      // 2. Cold navigation: Show slim top progress bar, DO NOT wipe out screen with grey skeleton!
+      isNavigating = true;
       showProgressBar();
 
       try {
         const resp = await fetch(url, {
           headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-SP-Instant-Nav': '1'
+            'X-Requested-With': 'XMLHttpRequest'
           }
         });
 
@@ -1727,66 +1721,19 @@
         setToCache(url, pageData);
         renderPage(pageData, url, pushState);
       } catch(err) {
-        console.error('InstantNav fallback:', err);
+        console.error('InstantNav navigation fallback:', err);
         window.location.href = url;
       } finally {
+        isNavigating = false;
         hideProgressBar();
       }
-    }
-
-    function showSkeletonLoading(url) {
-      const main = document.getElementById('sp-real-content');
-      if (!main) return;
-
-      updateSidebarActiveState(url);
-      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-
-      main.innerHTML = `
-        <div style="padding:10px 0; animation:spShimmerFade 0.8s infinite alternate ease-in-out;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
-            <div style="height:34px; width:220px; background:#E2E8F0; border-radius:10px;"></div>
-            <div style="height:34px; width:140px; background:#E2E8F0; border-radius:10px;"></div>
-          </div>
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; margin-bottom:24px;">
-            <div style="height:100px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-              <div style="height:14px; width:60%; background:#F1F5F9; border-radius:6px; margin-bottom:12px;"></div>
-              <div style="height:28px; width:40%; background:#E2E8F0; border-radius:8px;"></div>
-            </div>
-            <div style="height:100px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-              <div style="height:14px; width:60%; background:#F1F5F9; border-radius:6px; margin-bottom:12px;"></div>
-              <div style="height:28px; width:40%; background:#E2E8F0; border-radius:8px;"></div>
-            </div>
-            <div style="height:100px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-              <div style="height:14px; width:60%; background:#F1F5F9; border-radius:6px; margin-bottom:12px;"></div>
-              <div style="height:28px; width:40%; background:#E2E8F0; border-radius:8px;"></div>
-            </div>
-            <div style="height:100px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-              <div style="height:14px; width:60%; background:#F1F5F9; border-radius:6px; margin-bottom:12px;"></div>
-              <div style="height:28px; width:40%; background:#E2E8F0; border-radius:8px;"></div>
-            </div>
-          </div>
-          <div style="background:#FFFFFF; border:1px solid #E2E8F0; border-radius:16px; padding:24px; min-height:300px;">
-            <div style="height:20px; width:30%; background:#F1F5F9; border-radius:6px; margin-bottom:20px;"></div>
-            <div style="height:44px; width:100%; background:#F8FAFC; border-radius:8px; margin-bottom:12px;"></div>
-            <div style="height:44px; width:100%; background:#F8FAFC; border-radius:8px; margin-bottom:12px;"></div>
-            <div style="height:44px; width:100%; background:#F8FAFC; border-radius:8px; margin-bottom:12px;"></div>
-            <div style="height:44px; width:100%; background:#F8FAFC; border-radius:8px;"></div>
-          </div>
-        </div>
-        <style id="sp-shimmer-style">
-          @keyframes spShimmerFade {
-            0% { opacity: 0.6; }
-            100% { opacity: 1; }
-          }
-        </style>
-      `;
     }
 
     function renderPage(pageData, url, pushState) {
       const main = document.getElementById('sp-real-content');
       if (!main) return;
 
-      // 0ms Synchronous DOM Swap
+      // 0ms Synchronous DOM Swap with REAL DATA
       main.innerHTML = pageData.html;
       document.title = pageData.title;
 
@@ -1818,9 +1765,11 @@
       }
 
       // Trigger standard lifecycle events
-      document.dispatchEvent(new Event('DOMContentLoaded'));
-      window.dispatchEvent(new Event('load'));
-      window.dispatchEvent(new CustomEvent('sp:navigated', { detail: { url } }));
+      try {
+        document.dispatchEvent(new Event('DOMContentLoaded'));
+        window.dispatchEvent(new Event('load'));
+        window.dispatchEvent(new CustomEvent('sp:navigated', { detail: { url } }));
+      } catch(e) {}
     }
 
     function updateSidebarActiveState(url) {
@@ -1841,30 +1790,52 @@
     function executePageScripts(container) {
       const scripts = container.querySelectorAll('script');
       scripts.forEach(oldScript => {
-        const newScript = document.createElement('script');
-        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
-        newScript.textContent = oldScript.textContent;
-        oldScript.parentNode.replaceChild(newScript, oldScript);
+        try {
+          if (oldScript.src) {
+            if (!document.querySelector(`script[src="${oldScript.src}"]`)) {
+              const newScript = document.createElement('script');
+              newScript.src = oldScript.src;
+              document.head.appendChild(newScript);
+            }
+          } else if (oldScript.textContent && oldScript.textContent.trim()) {
+            const fn = new Function(oldScript.textContent);
+            fn();
+          }
+        } catch(e) {
+          console.warn('[InstantNav] Page script notice:', e);
+        }
       });
     }
 
     function executeRawScripts(htmlString) {
-      const temp = document.createElement('div');
-      temp.innerHTML = htmlString;
-      const scripts = temp.querySelectorAll('script');
-      scripts.forEach(oldScript => {
-        const newScript = document.createElement('script');
-        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
-        newScript.textContent = oldScript.textContent;
-        document.body.appendChild(newScript);
-        setTimeout(() => newScript.remove(), 100);
-      });
+      if (!htmlString) return;
+      try {
+        const temp = document.createElement('div');
+        temp.innerHTML = htmlString;
+        const scripts = temp.querySelectorAll('script');
+        scripts.forEach(oldScript => {
+          try {
+            if (oldScript.src) {
+              if (!document.querySelector(`script[src="${oldScript.src}"]`)) {
+                const newScript = document.createElement('script');
+                newScript.src = oldScript.src;
+                document.head.appendChild(newScript);
+              }
+            } else if (oldScript.textContent && oldScript.textContent.trim()) {
+              const fn = new Function(oldScript.textContent);
+              fn();
+            }
+          } catch(e) {
+            console.warn('[InstantNav] Raw script notice:', e);
+          }
+        });
+      } catch(e) {}
     }
 
     async function revalidateUrlInBackground(url) {
       try {
         const resp = await fetch(url, {
-          headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-SP-Instant-Nav': '1' }
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
         });
         if (resp.ok) {
           const htmlText = await resp.text();
@@ -1914,6 +1885,9 @@
   });
 </script>
 
+<div id="sp-page-scripts" style="display:none;">
+@yield('scripts')
+</div>
 @yield('scripts')
 </body>
 </html>
