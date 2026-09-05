@@ -182,7 +182,18 @@ class SupplierPurchaseController extends Controller
             ['purchase_id' => $purchase->id]
         );
 
-        return redirect()->route('supplier.purchase-orders.show', $id)
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => "✅ Purchase Order {$purchase->reference_code} accepted. You can now create an ASN.",
+                'purchase_id' => $purchase->id,
+                'reference_code' => $purchase->reference_code,
+                'status' => Purchase::RECEIVED,
+                'redirect_url' => route('supplier.asn.create', $purchase->id)
+            ]);
+        }
+
+        return redirect()->route('supplier.asn.create', $purchase->id)
             ->with('success', "✅ Purchase Order {$purchase->reference_code} accepted. You can now create an ASN to schedule dispatch.");
     }
 
@@ -198,6 +209,9 @@ class SupplierPurchaseController extends Controller
             $purchase = Purchase::find($id);
         }
         if (!$purchase) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Purchase order not found.'], 404);
+            }
             return redirect()->route('supplier.purchase-orders.index')
                 ->with('error', "Purchase order not found.");
         }
@@ -210,11 +224,19 @@ class SupplierPurchaseController extends Controller
 
         SupplierNotification::createForSupplier($supplierId, 'po_rejected',
             'Purchase Order Rejected ❌',
-            "PO #{$purchase->reference_code} was rejected. Reason: {$request->reason}",
-            ['purchase_id' => $purchase->id, 'reason' => $request->reason]
+            "PO #{$purchase->reference_code} was rejected. Reason: {$reason}",
+            ['purchase_id' => $purchase->id, 'reason' => $reason]
         );
 
-        return redirect()->route('supplier.purchase-orders.show', $id)
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => "PO {$purchase->reference_code} rejected.",
+                'purchase_id' => $purchase->id
+            ]);
+        }
+
+        return redirect()->back()
             ->with('error', "PO {$purchase->reference_code} rejected. Reason recorded and admin notified.");
     }
 

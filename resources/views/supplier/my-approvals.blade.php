@@ -308,30 +308,35 @@
 }
 
 /* ── 6. Slide-Over Review Drawer ── */
-.sp-drawer-backdrop {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(2px);
-  z-index: 1040;
-  display: none;
+.sp-drawer-backdrop,
+#apprDrawerBackdrop {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  background: rgba(15, 23, 42, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  z-index: 99998 !important;
+  display: none !important;
 }
-.sp-drawer-backdrop.show { display: block; }
+.sp-drawer-backdrop.show,
+#apprDrawerBackdrop.show { display: block !important; }
 
-.sp-drawer-right {
-  position: fixed;
-  top: 0; right: -500px;
-  width: 500px;
-  max-width: 90vw;
-  height: 100vh;
-  background: #FFFFFF;
-  z-index: 1050;
-  box-shadow: -8px 0 30px rgba(0,0,0,0.12);
-  transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
+.sp-drawer-right,
+#apprDetailsDrawer {
+  position: fixed !important;
+  top: 0 !important; right: -560px !important;
+  width: 540px !important;
+  max-width: 95vw !important;
+  height: 100vh !important;
+  background: #FFFFFF !important;
+  z-index: 99999 !important;
+  box-shadow: -12px 0 40px rgba(15, 23, 42, 0.2) !important;
+  transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
-.sp-drawer-right.show { right: 0; }
+.sp-drawer-right.show,
+#apprDetailsDrawer.show { right: 0 !important; }
 
 .sp-drawer-head {
   padding: 18px 22px;
@@ -354,17 +359,18 @@
 
 /* Modals */
 .sp-modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(3px);
-  z-index: 1100;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+  position: fixed !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+  z-index: 100000 !important;
+  display: none !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
 }
-.sp-modal-overlay.show { display: flex; }
+.sp-modal-overlay.show { display: flex !important; }
 .sp-modal-box {
   background: #FFFFFF;
   border-radius: 20px;
@@ -591,7 +597,7 @@
             <tr class="po-row-tr po-data-row" 
                 id="po-row-{{ $po->id }}"
                 data-search="{{ strtolower($refCode . ' ' . ($firstItem->product->name ?? '') . ' ' . ($po->warehouse->name ?? '') . ' ' . $po->grand_total) }}"
-                onclick="openDrawer({{ $po->id }})"
+                onclick="openApprovalDrawer({{ $po->id }})"
                 style="border-bottom:1px solid #F1F5F9;">
               
               <!-- Checkbox -->
@@ -601,7 +607,7 @@
 
               <!-- PO Reference -->
               <td>
-                <a href="javascript:void(0)" onclick="openDrawer({{ $po->id }})" class="sp-ref-pill">
+                <a href="javascript:void(0)" onclick="openApprovalDrawer({{ $po->id }})" class="sp-ref-pill">
                   {{ $refCode }}
                 </a>
                 <div style="font-size:11px; color:#94A3B8; margin-top:2px;">
@@ -658,7 +664,7 @@
               <!-- Status -->
               <td>
                 @if($isPending)
-                  <span class="badge" style="background:#FEF3C7; color:#B45309; border:1px solid #FDE68A; font-size:12px; padding:6px 12px; border-radius:14px; font-weight:800;">
+                  <span class="badge" style="background:#FEF3C7; color:#B45309; border:1px solid #FDE68A; font-size:12px; padding:6px 12px; border-radius:14px; font-weight:800; cursor:pointer;" onclick="openApprovalDrawer({{ $po->id }})" title="Click to Review PO">
                     • Review & Accept
                   </span>
                 @elseif($isRejected)
@@ -690,8 +696,8 @@
               <td style="text-align: right; padding-right:16px;" onclick="event.stopPropagation();">
                 <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
                   @if($isPending)
-                    <button type="button" class="btn btn-sm btn-warning fw-bold" style="background:#F59E0B; border:none; border-radius:16px; padding:6px 14px; font-size:12.5px; color:#FFF;" onclick="openDrawer({{ $po->id }})">
-                      <i class="bi bi-clipboard-check me-1"></i> Review PO
+                    <button type="button" class="btn btn-sm btn-warning fw-bold" style="background:#F59E0B; border:none; border-radius:16px; padding:6px 14px; font-size:12.5px; color:#FFF; display:inline-flex; align-items:center; gap:5px; box-shadow:0 2px 6px rgba(245,158,11,0.25);" onclick="openApprovalDrawer({{ $po->id }})">
+                      <i class="bi bi-clipboard-check"></i> Review PO
                     </button>
                   @elseif($isApproved && !$asn)
                     <a href="{{ route('supplier.asn.create', $po->id) }}" class="btn btn-sm btn-success fw-bold" style="background:#16A34A; border:none; border-radius:16px; padding:6px 14px; font-size:12.5px;">
@@ -711,7 +717,7 @@
                     @endif
                   @endif
 
-                  <button type="button" class="sp-action-btn-circle" onclick="openDrawer({{ $po->id }})" title="View PO Details">
+                  <button type="button" class="sp-action-btn-circle" onclick="openApprovalDrawer({{ $po->id }})" title="View PO Details">
                     <i class="bi bi-eye"></i>
                   </button>
 
@@ -759,20 +765,20 @@
 </div>
 
 <!-- ── Slide-Over Review Drawer ── -->
-<div class="sp-drawer-backdrop" id="poDrawerBackdrop" onclick="closeDrawer()"></div>
-<div class="sp-drawer-right" id="poDetailsDrawer">
+<div class="sp-drawer-backdrop" id="apprDrawerBackdrop" onclick="closeApprovalDrawer()"></div>
+<div class="sp-drawer-right" id="apprDetailsDrawer">
   <div class="sp-drawer-head">
     <div>
       <div style="font-size:11px; font-weight:800; color:#64748B; text-transform:uppercase;">Purchase Order Review</div>
-      <div class="font-monospace fw-bold" style="font-size:18px; color:#0F172A;" id="drawerPoRef">PO Number</div>
+      <div class="font-monospace fw-bold" style="font-size:18px; color:#0F172A;" id="apprDrawerPoRef">PO Number</div>
     </div>
-    <button type="button" onclick="closeDrawer()" class="btn-close"></button>
+    <button type="button" onclick="closeApprovalDrawer()" class="btn-close"></button>
   </div>
 
   <div class="sp-drawer-body">
     <!-- Status & Decision Header -->
-    <div class="mb-3 d-flex justify-content-between align-items-center" id="drawerStatusStrip">
-      <div id="drawerStatusBadge">
+    <div class="mb-3 d-flex justify-content-between align-items-center" id="apprDrawerStatusStrip">
+      <div id="apprDrawerStatusBadge">
         <span class="badge" style="background:#FEF3C7; color:#B45309; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Pending Review</span>
       </div>
     </div>
@@ -782,16 +788,16 @@
       <div style="font-size: 11.5px; font-weight: 800; color: #0F172A; text-transform: uppercase; margin-bottom: 10px;">ORDER SUMMARY</div>
       <div style="display: grid; grid-template-columns: 130px 1fr; gap: 8px 12px; font-size: 13px;">
         <span style="color: #64748B; font-weight: 600;">Buyer:</span>
-        <strong style="color: #0F172A;">Karthik R (Suguna)</strong>
+        <strong style="color: #0F172A;" id="apprDrawerBuyer">Karthik R (Suguna)</strong>
 
         <span style="color: #64748B; font-weight: 600;">Warehouse:</span>
-        <strong style="color: #0F172A;" id="drawerWh">Suguna Warehouse</strong>
+        <strong style="color: #0F172A;" id="apprDrawerWh">Suguna Warehouse</strong>
 
         <span style="color: #64748B; font-weight: 600;">Expected Delivery:</span>
-        <span style="color: #16A34A; font-weight: 800;" id="drawerDate">07 Sep 2026</span>
+        <span style="color: #16A34A; font-weight: 800;" id="apprDrawerDate">07 Sep 2026</span>
 
         <span style="color: #64748B; font-weight: 600;">Grand Total:</span>
-        <strong style="color: #0F172A; font-size: 15px;" id="drawerAmount">₹ 0.00</strong>
+        <strong style="color: #0F172A; font-size: 15px;" id="apprDrawerAmount">₹ 0.00</strong>
       </div>
     </div>
 
@@ -807,14 +813,14 @@
             <th style="padding:10px 12px; text-align:right; border-bottom:1px solid #E2E8F0; color:#64748B; font-weight:800;">TOTAL</th>
           </tr>
         </thead>
-        <tbody id="drawerItemsBody">
+        <tbody id="apprDrawerItemsBody">
           <!-- Populated by JS -->
         </tbody>
       </table>
     </div>
 
     <!-- Decision Center Box (Visible when PO is Pending) -->
-    <div id="drawerDecisionSection" style="background:#FFFDF5; border:1.5px solid #FDE68A; border-radius:14px; padding:16px; margin-bottom:14px;">
+    <div id="apprDrawerDecisionSection" style="background:#FFFDF5; border:1.5px solid #FDE68A; border-radius:14px; padding:16px; margin-bottom:14px;">
       <div style="font-size:13.5px; font-weight:900; color:#92400E; margin-bottom:4px;">
         ⚡ Supplier Fulfillment Decision
       </div>
@@ -823,10 +829,10 @@
       </p>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <button type="button" class="sp-btn-pill sp-btn-primary" style="height:42px; font-size:13px;" onclick="triggerAcceptModal()">
+        <button type="button" id="btnYesFulfill" class="sp-btn-pill sp-btn-primary" style="height:44px; font-size:13px; font-weight:800; background:#16A34A; border-color:#16A34A; color:#FFF; display:inline-flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(22,163,74,0.3);" onclick="executeFulfillAndRedirect()">
           ✓ YES, I CAN FULFILL
         </button>
-        <button type="button" class="sp-btn-pill" style="height:42px; font-size:13px; color:#DC2626; border-color:#FECACA; background:#FEF2F2;" onclick="triggerRejectModal()">
+        <button type="button" class="sp-btn-pill" style="height:44px; font-size:13px; font-weight:700; color:#DC2626; border-color:#FECACA; background:#FEF2F2;" onclick="triggerRejectModal()">
           ✕ CANNOT FULFILL
         </button>
       </div>
@@ -835,39 +841,12 @@
   </div>
 
   <div class="sp-drawer-foot" style="display:flex; justify-content:space-between; align-items:center;">
-    <a href="#" id="drawerPdfLink" class="btn btn-outline-secondary btn-sm fw-bold" style="border-radius: 16px;">
+    <a href="#" id="apprDrawerPdfLink" class="btn btn-outline-secondary btn-sm fw-bold" style="border-radius: 16px;">
       <i class="bi bi-download"></i> Download PO PDF
     </a>
-    <button type="button" class="btn btn-light btn-sm fw-bold" onclick="closeDrawer()" style="border-radius: 16px;">
+    <button type="button" class="btn btn-light btn-sm fw-bold" onclick="closeApprovalDrawer()" style="border-radius: 16px;">
       Close
     </button>
-  </div>
-</div>
-
-<!-- ── Accept Confirmation Modal ── -->
-<div class="sp-modal-overlay" id="acceptModalOverlay">
-  <div class="sp-modal-box">
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-      <div style="width:40px; height:40px; border-radius:12px; background:#DCFCE7; color:#16A34A; display:flex; align-items:center; justify-content:center; font-size:20px;">
-        ✓
-      </div>
-      <div>
-        <div style="font-size:17px; font-weight:900; color:#0F172A;">Confirm Purchase Order</div>
-        <div style="font-size:12px; color:#64748B;">Accept and commitment to fulfill</div>
-      </div>
-    </div>
-
-    <p style="font-size:13px; color:#334155; line-height:1.45; margin-bottom:16px;">
-      You're confirming that you can fulfill all requested quantities and meet the delivery timeline for <strong id="acceptPoCode">PO</strong>.
-    </p>
-
-    <form method="POST" id="acceptForm" action="">
-      @csrf
-      <div style="display:flex; justify-content:flex-end; gap:10px;">
-        <button type="button" class="sp-btn-pill" onclick="closeModal('acceptModalOverlay')">Cancel</button>
-        <button type="submit" class="sp-btn-pill sp-btn-primary">Confirm & Accept Order</button>
-      </div>
-    </form>
   </div>
 </div>
 
@@ -915,8 +894,8 @@
 
 @section('scripts')
 <script>
-// Real PO Client Database
-const poDataStore = {
+// Real PO Client Database (Safe re-assignment)
+window.poDataStore = Object.assign(window.poDataStore || {}, {
   @foreach($approvals as $p)
   @php
     $asn = $asnMapCollection[$p->id] ?? null;
@@ -945,79 +924,163 @@ const poDataStore = {
     ]
   },
   @endforeach
-};
+});
 
-let currentSelectedPoId = null;
+window.currentSelectedPoId = null;
 
-function openDrawer(id) {
-  const po = poDataStore[id];
+function getActiveElement(id) {
+  const activePane = document.querySelector('.sp-view-pane[style*="display: block"], .sp-view-pane[style*="display:block"]');
+  if (activePane) {
+    const el = activePane.querySelector('#' + id);
+    if (el) return el;
+  }
+  return document.getElementById(id);
+}
+
+window.openApprovalDrawer = function(id) {
+  const po = window.poDataStore ? window.poDataStore[id] : null;
   if (!po) {
     console.warn("PO not found in store for ID:", id);
+    window.location.href = "/supplier/purchase-orders/" + id;
     return;
   }
 
-  currentSelectedPoId = id;
-  document.getElementById('drawerPoRef').innerText = po.ref;
-  document.getElementById('drawerWh').innerText = po.warehouse;
-  document.getElementById('drawerDate').innerText = po.date;
-  document.getElementById('drawerAmount').innerText = po.amount;
-  document.getElementById('drawerPdfLink').href = po.pdfUrl;
+  window.currentSelectedPoId = id;
+  const refEl = getActiveElement('apprDrawerPoRef');
+  if (refEl) refEl.innerText = po.ref;
+  const whEl = getActiveElement('apprDrawerWh');
+  if (whEl) whEl.innerText = po.warehouse;
+  const dateEl = getActiveElement('apprDrawerDate');
+  if (dateEl) dateEl.innerText = po.date;
+  const amtEl = getActiveElement('apprDrawerAmount');
+  if (amtEl) amtEl.innerText = po.amount;
+  const pdfEl = getActiveElement('apprDrawerPdfLink');
+  if (pdfEl) pdfEl.href = po.pdfUrl;
+
+  const btnFulfill = getActiveElement('btnYesFulfill');
+  if (btnFulfill) {
+    btnFulfill.disabled = false;
+    btnFulfill.innerHTML = '✓ YES, I CAN FULFILL';
+  }
 
   // Decision section visibility
-  const decSec = document.getElementById('drawerDecisionSection');
-  const statBadge = document.getElementById('drawerStatusBadge');
+  const decSec = getActiveElement('apprDrawerDecisionSection');
+  const statBadge = getActiveElement('apprDrawerStatusBadge');
 
   if (po.isPending) {
-    decSec.style.display = 'block';
-    statBadge.innerHTML = '<span class="badge" style="background:#FEF3C7; color:#B45309; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Pending Review</span>';
+    if (decSec) decSec.style.display = 'block';
+    if (statBadge) statBadge.innerHTML = '<span class="badge" style="background:#FEF3C7; color:#B45309; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Pending Review</span>';
   } else {
-    decSec.style.display = 'none';
-    statBadge.innerHTML = '<span class="badge" style="background:#DCFCE7; color:#15803D; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Approved</span>';
+    if (decSec) decSec.style.display = 'none';
+    if (statBadge) statBadge.innerHTML = '<span class="badge" style="background:#DCFCE7; color:#15803D; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Approved</span>';
   }
 
   // Populate items
-  const tbody = document.getElementById('drawerItemsBody');
-  tbody.innerHTML = '';
-  po.items.forEach(it => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td style="padding:10px 12px; border-bottom:1px solid #F1F5F9; font-weight:700; color:#0F172A;">${it.name}</td>
-      <td style="padding:10px 12px; border-bottom:1px solid #F1F5F9; text-align:center; font-weight:800; color:#16A34A;">${it.qty}</td>
-      <td style="padding:10px 12px; border-bottom:1px solid #F1F5F9; text-align:right; color:#64748B;">${it.price}</td>
-      <td style="padding:10px 12px; border-bottom:1px solid #F1F5F9; text-align:right; font-weight:800; color:#0F172A;">${it.total}</td>
-    `;
-    tbody.appendChild(tr);
-  });
+  const tbody = getActiveElement('apprDrawerItemsBody');
+  if (tbody) {
+    tbody.innerHTML = '';
+    if (po.items && po.items.length > 0) {
+      po.items.forEach(it => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="padding:10px 12px; border-bottom:1px solid #F1F5F9; font-weight:700; color:#0F172A;">${it.name}</td>
+          <td style="padding:10px 12px; border-bottom:1px solid #F1F5F9; text-align:center; font-weight:800; color:#16A34A;">${it.qty}</td>
+          <td style="padding:10px 12px; border-bottom:1px solid #F1F5F9; text-align:right; color:#64748B;">${it.price}</td>
+          <td style="padding:10px 12px; border-bottom:1px solid #F1F5F9; text-align:right; font-weight:800; color:#0F172A;">${it.total}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } else {
+      tbody.innerHTML = '<tr><td colspan="4" style="padding:14px; text-align:center; color:#94A3B8;">No items listed</td></tr>';
+    }
+  }
 
-  document.getElementById('poDrawerBackdrop').classList.add('show');
-  document.getElementById('poDetailsDrawer').classList.add('show');
-}
+  const backdrop = getActiveElement('apprDrawerBackdrop');
+  if (backdrop) backdrop.classList.add('show');
+  const drawer = getActiveElement('apprDetailsDrawer');
+  if (drawer) drawer.classList.add('show');
+};
 
-function closeDrawer() {
-  document.getElementById('poDrawerBackdrop').classList.remove('show');
-  document.getElementById('poDetailsDrawer').classList.remove('show');
-}
+window.closeApprovalDrawer = function() {
+  const backdrop = getActiveElement('apprDrawerBackdrop');
+  if (backdrop) backdrop.classList.remove('show');
+  const drawer = getActiveElement('apprDetailsDrawer');
+  if (drawer) drawer.classList.remove('show');
+};
 
-function triggerAcceptModal() {
-  if (!currentSelectedPoId) return;
-  const po = poDataStore[currentSelectedPoId];
-  document.getElementById('acceptPoCode').innerText = po.ref;
-  document.getElementById('acceptForm').action = "/supplier/purchase-orders/" + currentSelectedPoId + "/approve";
-  document.getElementById('acceptModalOverlay').classList.add('show');
-}
+// Global aliases for compatibility
+window.openDrawer = window.openApprovalDrawer;
+window.closeDrawer = window.closeApprovalDrawer;
 
-function triggerRejectModal() {
-  if (!currentSelectedPoId) return;
-  document.getElementById('rejectForm').action = "/supplier/purchase-orders/" + currentSelectedPoId + "/reject";
-  document.getElementById('rejectModalOverlay').classList.add('show');
-}
+// Accept PO and immediately navigate to the Create ASN page for this PO
+window.executeFulfillAndRedirect = async function() {
+  if (!window.currentSelectedPoId) return;
+  const id = window.currentSelectedPoId;
+  const po = (window.poDataStore && window.poDataStore[id]) ? window.poDataStore[id] : null;
+  const ref = po ? po.ref : 'PO';
 
-function closeModal(id) {
-  document.getElementById(id).classList.remove('show');
-}
+  const btn = getActiveElement('btnYesFulfill');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Accepting & Opening ASN...';
+  }
 
-function handleRejectSelect(val) {
-  const txt = document.getElementById('rejectReasonText');
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content 
+    || document.querySelector('input[name="_token"]')?.value;
+
+  try {
+    const res = await fetch("/supplier/purchase-orders/" + id + "/approve", {
+      method: "POST",
+      headers: {
+        "X-CSRF-TOKEN": csrfToken,
+        "Accept": "application/json",
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    });
+
+    const data = await res.json();
+    if (data && data.success) {
+      // Direct navigation to ASN create page for this PO
+      const targetUrl = data.redirect_url || ("/supplier/asn/create/" + id);
+      window.location.href = targetUrl;
+    } else {
+      alert("Error: " + ((data && data.message) || "Failed to accept purchase order."));
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '✓ YES, I CAN FULFILL';
+      }
+    }
+  } catch(e) {
+    // Fallback: standard POST form submit which redirects directly to supplier.asn.create
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = "/supplier/purchase-orders/" + id + "/approve";
+    const tokenInput = document.createElement('input');
+    tokenInput.type = 'hidden';
+    tokenInput.name = '_token';
+    tokenInput.value = csrfToken;
+    form.appendChild(tokenInput);
+    document.body.appendChild(form);
+    form.submit();
+  }
+};
+
+window.triggerRejectModal = function() {
+  if (!window.currentSelectedPoId) return;
+  const formEl = getActiveElement('rejectForm');
+  if (formEl) formEl.action = "/supplier/purchase-orders/" + window.currentSelectedPoId + "/reject";
+  const modal = getActiveElement('rejectModalOverlay');
+  if (modal) modal.classList.add('show');
+};
+
+window.closeModal = function(id) {
+  const el = getActiveElement(id);
+  if (el) el.classList.remove('show');
+};
+
+window.handleRejectSelect = function(val) {
+  const txt = getActiveElement('rejectReasonText');
+  if (!txt) return;
   if (val === 'Other') {
     txt.value = '';
     txt.placeholder = 'Please write specific reason (min 10 chars)...';
@@ -1025,11 +1088,11 @@ function handleRejectSelect(val) {
   } else {
     txt.value = val;
   }
-}
+};
 
 // Client Table Search
-function filterTable(query) {
-  query = query.toLowerCase().trim();
+window.filterTable = function(query) {
+  query = (query || '').toLowerCase().trim();
   const rows = document.querySelectorAll('.po-data-row');
   rows.forEach(r => {
     const searchData = r.getAttribute('data-search') || '';
@@ -1039,7 +1102,7 @@ function filterTable(query) {
       r.style.display = 'none';
     }
   });
-}
+};
 
 // Select All Checkbox
 document.addEventListener("DOMContentLoaded", function() {
@@ -1056,9 +1119,8 @@ document.addEventListener("DOMContentLoaded", function() {
 // Keyboard shortcuts (Esc closes drawer/modals)
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
-    closeDrawer();
-    closeModal('acceptModalOverlay');
-    closeModal('rejectModalOverlay');
+    window.closeApprovalDrawer();
+    window.closeModal('rejectModalOverlay');
   }
 });
 

@@ -364,12 +364,12 @@
           $isPending = in_array($po->status, [2, 3]) && !$isRejected;
           $isApproved = ($po->status == 1) && !$isRejected;
         @endphp
-        <tr id="po-row-{{ $po->id }}" class="po-row-tr" style="border-bottom:1px solid #F1F5F9;" onclick="openDrawer({{ $po->id }})">
+        <tr id="po-row-{{ $po->id }}" class="po-row-tr" style="border-bottom:1px solid #F1F5F9;" onclick="openPoOrderDrawer({{ $po->id }})">
           <td style="padding:16px;" onclick="event.stopPropagation();">
             <input type="checkbox" class="form-check-input" style="border-radius:6px; width:18px; height:18px;">
           </td>
           <td>
-            <a href="javascript:void(0)" class="sp-ref-pill" onclick="openDrawer({{ $po->id }})">
+            <a href="javascript:void(0)" class="sp-ref-pill" onclick="openPoOrderDrawer({{ $po->id }})">
               {{ $refCode }}
             </a>
           </td>
@@ -419,7 +419,7 @@
           </td>
           <td style="text-align:right; padding-right:16px;" onclick="event.stopPropagation();">
             <div style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">
-              <button type="button" class="sp-action-btn-circle" title="View PO Details" onclick="openDrawer({{ $po->id }})">
+              <button type="button" class="sp-action-btn-circle" title="View PO Details" onclick="openPoOrderDrawer({{ $po->id }})">
                 <i class="bi bi-eye"></i>
               </button>
               @if($asn)
@@ -465,14 +465,14 @@
 </div>
 
 <!-- RIGHT-SIDE PO DETAILS DRAWER -->
-<div class="sp-drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
+<div class="sp-drawer-backdrop" id="drawerBackdrop" onclick="closePoOrderDrawer()"></div>
 <div class="sp-drawer-right" id="poDetailsDrawer">
   <div class="sp-drawer-head">
     <div>
       <div style="font-size: 16px; font-weight: 900; color: #0F172A;" id="drCode">PO Number</div>
       <div style="font-size: 12px; color: #64748B;" id="drDate">Date</div>
     </div>
-    <button type="button" class="btn-close" onclick="closeDrawer()"></button>
+    <button type="button" class="btn-close" onclick="closePoOrderDrawer()"></button>
   </div>
   <div class="sp-drawer-body">
     <!-- Status Badge -->
@@ -515,7 +515,7 @@
     <a id="drPdfLink" href="#" class="btn btn-outline-secondary btn-sm fw-bold" style="border-radius: 16px;">
       <i class="bi bi-download"></i> Download PO PDF
     </a>
-    <button type="button" class="btn btn-light btn-sm fw-bold" onclick="closeDrawer()" style="border-radius: 16px;">
+    <button type="button" class="btn btn-light btn-sm fw-bold" onclick="closePoOrderDrawer()" style="border-radius: 16px;">
       Close
     </button>
   </div>
@@ -525,7 +525,7 @@
 
 @section('scripts')
 <script>
-const drawerPoData = {
+window.drawerPoData = {
   @foreach($purchases as $po)
   @php
     $asn = $asnMap[$po->id] ?? null;
@@ -561,40 +561,48 @@ const drawerPoData = {
   @endforeach
 };
 
-function openDrawer(poId) {
-  const data = drawerPoData[poId];
+window.openPoOrderDrawer = function(poId) {
+  const data = window.drawerPoData ? window.drawerPoData[poId] : null;
   if (!data) return;
 
-  document.getElementById('drCode').innerText = data.code;
-  document.getElementById('drDate').innerText = 'Created on ' + data.date;
-  document.getElementById('drWarehouse').innerText = data.warehouse;
-  document.getElementById('drDeliveryDate').innerText = data.delivery_date;
-  document.getElementById('drTotalValue').innerText = data.total_val;
-  document.getElementById('drPdfLink').href = data.pdf_url;
+  const codeEl = document.getElementById('drCode');
+  if (codeEl) codeEl.innerText = data.code;
+  const dateEl = document.getElementById('drDate');
+  if (dateEl) dateEl.innerText = 'Created on ' + data.date;
+  const whEl = document.getElementById('drWarehouse');
+  if (whEl) whEl.innerText = data.warehouse;
+  const delEl = document.getElementById('drDeliveryDate');
+  if (delEl) delEl.innerText = data.delivery_date;
+  const valEl = document.getElementById('drTotalValue');
+  if (valEl) valEl.innerText = data.total_val;
+  const pdfEl = document.getElementById('drPdfLink');
+  if (pdfEl) pdfEl.href = data.pdf_url;
 
   const btnCta = document.getElementById('drCtaBtn');
   const badgeStat = document.getElementById('drStatusBadge');
 
-  if (data.is_pending) {
-    badgeStat.innerHTML = '<span class="badge" style="background:#FEF3C7; color:#B45309; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Pending Review</span>';
-    btnCta.innerText = 'Review PO';
-    btnCta.href = "{{ route('supplier.my-approvals') }}";
-    btnCta.className = 'btn btn-sm btn-warning fw-bold';
-  } else if (data.is_rejected) {
-    badgeStat.innerHTML = '<span class="badge" style="background:#FEE2E2; color:#B91C1C; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Rejected</span>';
-    btnCta.innerText = 'Rejected';
-    btnCta.href = '#';
-    btnCta.className = 'btn btn-sm btn-danger fw-bold disabled';
-  } else if (!data.has_asn) {
-    badgeStat.innerHTML = '<span class="badge" style="background:#DCFCE7; color:#15803D; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Approved</span>';
-    btnCta.innerText = '+ Create ASN';
-    btnCta.href = data.asn_create_url;
-    btnCta.className = 'btn btn-sm btn-success fw-bold';
-  } else {
-    badgeStat.innerHTML = '<span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• ASN Created</span>';
-    btnCta.innerText = 'Manage ASN';
-    btnCta.href = "{{ route('supplier.asn.index') }}";
-    btnCta.className = 'btn btn-sm btn-outline-success fw-bold';
+  if (btnCta && badgeStat) {
+    if (data.is_pending) {
+      badgeStat.innerHTML = '<span class="badge" style="background:#FEF3C7; color:#B45309; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Pending Review</span>';
+      btnCta.innerText = 'Review PO';
+      btnCta.href = "{{ route('supplier.my-approvals') }}";
+      btnCta.className = 'btn btn-sm btn-warning fw-bold';
+    } else if (data.is_rejected) {
+      badgeStat.innerHTML = '<span class="badge" style="background:#FEE2E2; color:#B91C1C; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Rejected</span>';
+      btnCta.innerText = 'Rejected';
+      btnCta.href = '#';
+      btnCta.className = 'btn btn-sm btn-danger fw-bold disabled';
+    } else if (!data.has_asn) {
+      badgeStat.innerHTML = '<span class="badge" style="background:#DCFCE7; color:#15803D; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Approved</span>';
+      btnCta.innerText = '+ Create ASN';
+      btnCta.href = data.asn_create_url;
+      btnCta.className = 'btn btn-sm btn-success fw-bold';
+    } else {
+      badgeStat.innerHTML = '<span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• ASN Created</span>';
+      btnCta.innerText = 'Manage ASN';
+      btnCta.href = "{{ route('supplier.asn.index') }}";
+      btnCta.className = 'btn btn-sm btn-outline-success fw-bold';
+    }
   }
 
   let itemsHtml = '';
@@ -611,16 +619,21 @@ function openDrawer(poId) {
       </div>
     `;
   });
-  document.getElementById('drProductsList').innerHTML = itemsHtml || '<div style="font-size:12px; color:#94A3B8;">No items listed.</div>';
+  const listEl = document.getElementById('drProductsList');
+  if (listEl) listEl.innerHTML = itemsHtml || '<div style="font-size:12px; color:#94A3B8;">No items listed.</div>';
 
-  document.getElementById('poDetailsDrawer').classList.add('show');
-  document.getElementById('drawerBackdrop').classList.add('show');
-}
+  const drEl = document.getElementById('poDetailsDrawer');
+  if (drEl) drEl.classList.add('show');
+  const bdEl = document.getElementById('drawerBackdrop');
+  if (bdEl) bdEl.classList.add('show');
+};
 
-function closeDrawer() {
-  document.getElementById('poDetailsDrawer').classList.remove('show');
-  document.getElementById('drawerBackdrop').classList.remove('show');
-}
+window.closePoOrderDrawer = function() {
+  const drEl = document.getElementById('poDetailsDrawer');
+  if (drEl) drEl.classList.remove('show');
+  const bdEl = document.getElementById('drawerBackdrop');
+  if (bdEl) bdEl.classList.remove('show');
+};
 
 // Real-Time Cross-Tab Event Listeners
 try {
