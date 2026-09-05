@@ -908,6 +908,10 @@ window.poDataStore = Object.assign(window.poDataStore || {}, {
     ref: "{{ $refStr }}",
     status: {{ $p->status }},
     isPending: {{ $isPending ? 'true' : 'false' }},
+    hasAsn: {{ $asn ? 'true' : 'false' }},
+    asnStatus: "{{ $asn ? $asn->status : '' }}",
+    asnRef: "{{ $asn ? $asn->asn_number : '' }}",
+    asnId: {{ $asn ? $asn->id : 'null' }},
     warehouse: "{{ addslashes($p->warehouse->name ?? 'Suguna Main Warehouse') }}",
     date: "{{ \Carbon\Carbon::parse($p->created_at)->addDays(7)->format('d M Y') }}",
     amount: "₹{{ number_format($p->grand_total, 2) }}",
@@ -967,11 +971,69 @@ window.openApprovalDrawer = function(id) {
   const decSec = getActiveElement('apprDrawerDecisionSection');
   const statBadge = getActiveElement('apprDrawerStatusBadge');
 
+  // ── Key Logic: Show/Hide based on PO status + ASN existence ──
   if (po.isPending) {
-    if (decSec) decSec.style.display = 'block';
+    // Pending PO: show fulfillment decision
+    if (decSec) {
+      decSec.style.display = 'block';
+      decSec.innerHTML = `
+        <div style="font-size:13.5px; font-weight:900; color:#92400E; margin-bottom:4px;">⚡ Supplier Fulfillment Decision</div>
+        <p style="font-size:12px; color:#78350F; margin:0 0 12px 0;">Can you fulfill all requested quantities and meet the expected delivery schedule?</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <button type="button" id="btnYesFulfill" class="sp-btn-pill sp-btn-primary" style="height:44px; font-size:13px; font-weight:800; background:#16A34A; border-color:#16A34A; color:#FFF; display:inline-flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(22,163,74,0.3);" onclick="executeFulfillAndRedirect()">
+            ✓ Accepting & Opening ASN...
+          </button>
+          <button type="button" class="sp-btn-pill" style="height:44px; font-size:13px; font-weight:700; color:#DC2626; border-color:#FECACA; background:#FEF2F2;" onclick="triggerRejectModal()">
+            ✕ CANNOT FULFILL
+          </button>
+        </div>`;
+      // Re-set button text after render
+      const newBtn = decSec.querySelector('#btnYesFulfill');
+      if (newBtn) newBtn.innerHTML = '✓ YES, I CAN FULFILL';
+    }
     if (statBadge) statBadge.innerHTML = '<span class="badge" style="background:#FEF3C7; color:#B45309; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Pending Review</span>';
-  } else {
-    if (decSec) decSec.style.display = 'none';
+
+  } else if (po.hasAsn) {
+    // ── ASN Already Created: HIDE the accept button, show ASN info ──
+    const asnStatusLabel = {
+      'dispatched': '🚚 Dispatched', 'in_transit': '🌐 In Transit',
+      'arrived': '✅ Arrived', 'delivered': '✅ Delivered',
+      'pending': '⏳ Pending', 'draft': '📝 Draft'
+    }[po.asnStatus] || po.asnStatus;
+    const asnColor = ['dispatched','in_transit'].includes(po.asnStatus) ? '#7C3AED' :
+                     ['arrived','delivered'].includes(po.asnStatus) ? '#15803D' : '#1D4ED8';
+    const asnBg = ['dispatched','in_transit'].includes(po.asnStatus) ? '#F5F3FF' :
+                  ['arrived','delivered'].includes(po.asnStatus) ? '#DCFCE7' : '#EFF6FF';
+
+    if (decSec) {
+      decSec.style.background = asnBg;
+      decSec.style.borderColor = '#D1D5DB';
+      decSec.innerHTML = `
+        <div style="font-size:13.5px; font-weight:900; color:${asnColor}; margin-bottom:6px;">✅ ASN Already Created</div>
+        <p style="font-size:12px; color:#374151; margin:0 0 10px 0;">
+          An ASN has already been created for this Purchase Order.<br>
+          <strong>ASN Ref:</strong> ${po.asnRef || 'N/A'} &nbsp;|&nbsp;
+          <strong>Status:</strong> <span style="color:${asnColor}; font-weight:800;">${asnStatusLabel}</span>
+        </p>
+        <a href="/supplier/asn" class="sp-btn-pill sp-btn-primary" style="height:40px; font-size:13px; background:${asnColor}; border-color:${asnColor}; color:#FFF; display:inline-flex; align-items:center; justify-content:center; gap:6px; text-decoration:none;">
+          <i class="bi bi-eye"></i> View Existing ASN
+        </a>`;
+    }
+    if (statBadge) statBadge.innerHTML = `<span class="badge" style="background:${asnBg}; color:${asnColor}; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800; border:1px solid ${asnColor}40;">✓ ASN ${asnStatusLabel}</span>`;
+
+  } else if (!po.isPending) {
+    // Approved, no ASN yet
+    if (decSec) {
+      decSec.style.display = 'block';
+      decSec.style.background = '#F0FDF4';
+      decSec.style.borderColor = '#86EFAC';
+      decSec.innerHTML = `
+        <div style="font-size:13.5px; font-weight:900; color:#15803D; margin-bottom:6px;">✅ PO Approved — Create ASN</div>
+        <p style="font-size:12px; color:#374151; margin:0 0 10px 0;">This Purchase Order is approved. Create an ASN to schedule your dispatch.</p>
+        <a href="/supplier/asn/create/${po.id}" class="sp-btn-pill sp-btn-primary" style="height:40px; font-size:13px; background:#16A34A; border-color:#16A34A; color:#FFF; display:inline-flex; align-items:center; justify-content:center; gap:6px; text-decoration:none;">
+          <i class="bi bi-plus-lg"></i> Create ASN Now
+        </a>`;
+    }
     if (statBadge) statBadge.innerHTML = '<span class="badge" style="background:#DCFCE7; color:#15803D; font-size:13px; padding:6px 14px; border-radius:14px; font-weight:800;">• Approved</span>';
   }
 
@@ -1019,10 +1081,21 @@ window.executeFulfillAndRedirect = async function() {
   const po = (window.poDataStore && window.poDataStore[id]) ? window.poDataStore[id] : null;
   const ref = po ? po.ref : 'PO';
 
+  // ── Check: if ASN already exists, block and show message ──
+  if (po && po.hasAsn) {
+    const decSec = getActiveElement('apprDrawerDecisionSection');
+    if (decSec) {
+      decSec.style.background = '#FFF7ED';
+      decSec.style.borderColor = '#FED7AA';
+      decSec.innerHTML = `<div style="font-size:13px; font-weight:800; color:#C2410C;">⚠️ ASN already exists for this PO (${po.asnRef}). Cannot create another.</div>`;
+    }
+    return;
+  }
+
   const btn = getActiveElement('btnYesFulfill');
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Accepting & Opening ASN...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Accepting...';
   }
 
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content 
@@ -1040,9 +1113,19 @@ window.executeFulfillAndRedirect = async function() {
 
     const data = await res.json();
     if (data && data.success) {
-      // Direct navigation to ASN create page for this PO
+      // Update local poDataStore so drawer won't show fulfillment again
+      if (window.poDataStore && window.poDataStore[id]) {
+        window.poDataStore[id].isPending = false;
+        window.poDataStore[id].status = 1;
+      }
+      // ── Use SpInstantNav for 0ms navigation (no full page reload!) ──
       const targetUrl = data.redirect_url || ("/supplier/asn/create/" + id);
-      window.location.href = targetUrl;
+      closeApprovalDrawer();
+      if (window.SpInstantNav && window.SpInstantNav.navigate) {
+        window.SpInstantNav.navigate(targetUrl);
+      } else {
+        window.location.href = targetUrl;
+      }
     } else {
       alert("Error: " + ((data && data.message) || "Failed to accept purchase order."));
       if (btn) {
@@ -1051,7 +1134,7 @@ window.executeFulfillAndRedirect = async function() {
       }
     }
   } catch(e) {
-    // Fallback: standard POST form submit which redirects directly to supplier.asn.create
+    // Fallback: standard POST form submit
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = "/supplier/purchase-orders/" + id + "/approve";

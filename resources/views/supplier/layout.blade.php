@@ -1786,6 +1786,8 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     SpInstantNav.init();
+    // ── Expose navigate globally so other pages can trigger instant 0ms navigation ──
+    window.SpInstantNav = { navigate: (url) => navigateTo(url, true) };
   });
 </script>
 </body>

@@ -537,13 +537,13 @@
 
     <div class="sp-header-actions">
       @if($asnRequiredCount > 0)
-        <a href="{{ route('supplier.asn.index', ['status' => 'asn_required']) }}" class="sp-btn-pill sp-btn-primary" title="Create ASN for {{ $asnRequiredCount }} approved PO(s)">
+        <a href="{{ route('supplier.asn.select-po') }}" class="sp-btn-pill sp-btn-primary" title="Create ASN for {{ $asnRequiredCount }} approved PO(s)">
           <i class="bi bi-plus-lg"></i> Create ASN ({{ $asnRequiredCount }})
         </a>
       @else
-        <button type="button" class="sp-btn-pill disabled" disabled title="No approved purchase orders are ready for ASN.">
+        <a href="{{ route('supplier.asn.select-po') }}" class="sp-btn-pill sp-btn-primary" title="Select an approved PO to create ASN">
           <i class="bi bi-plus-lg"></i> Create ASN
-        </button>
+        </a>
       @endif
 
       <button type="button" class="sp-btn-pill" onclick="openBulkUploadModal()">
