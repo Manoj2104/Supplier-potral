@@ -58,11 +58,28 @@ set PHP_CLI_SERVER_WORKERS=8
 
 netstat -ano | findstr ":8000" | findstr "LISTENING" >nul 2>&1
 if %errorlevel% neq 0 (
-    powershell -WindowStyle Hidden -Command "Start-Process php -ArgumentList '-S 127.0.0.1:8000 server.php' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
+    if exist "C:\xampp\php\php.exe" (
+        powershell -WindowStyle Hidden -Command "$env:PHP_CLI_SERVER_WORKERS='8'; Start-Process 'C:\xampp\php\php.exe' -ArgumentList '-S 127.0.0.1:8000 server.php' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
+    ) else (
+        powershell -WindowStyle Hidden -Command "$env:PHP_CLI_SERVER_WORKERS='8'; Start-Process php -ArgumentList '-S 127.0.0.1:8000 server.php' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
+    )
     timeout /t 1 /nobreak >nul 2>&1
     echo       [SUCCESS] High-Performance Engine started on http://127.0.0.1:8000
 ) else (
     echo       [SUCCESS] Application Engine is already active on http://127.0.0.1:8000
+)
+
+netstat -ano | findstr ":8088" | findstr "LISTENING" >nul 2>&1
+if %errorlevel% neq 0 (
+    powershell -WindowStyle Hidden -Command "Start-Process node -ArgumentList 'bridge/customer-display-bridge.js' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
+    echo       [SUCCESS] Customer Display & USB Scanner Bridge active on http://127.0.0.1:8088 (TCP: 8089)
+) else (
+    echo       [SUCCESS] Customer Display & USB Scanner Bridge is already active on ports 8088 / 8089
+)
+
+if exist "%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" (
+    start "" /b "%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" reverse tcp:8089 tcp:8089 >nul 2>&1
+    start "" /b "%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" reverse tcp:8088 tcp:8088 >nul 2>&1
 )
 
 echo.
