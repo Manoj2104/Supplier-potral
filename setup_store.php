@@ -100,6 +100,7 @@ $envUpdates = [
     'APP_ENV'   => 'production',
     'APP_DEBUG' => 'false',
     'APP_URL'   => 'http://127.0.0.1:8000',
+    'PORTAL_MODE' => 'pos',
     'DB_CONNECTION' => 'mysql',
     'DB_HOST'   => '127.0.0.1',
     'DB_PORT'   => '3307',
@@ -108,6 +109,7 @@ $envUpdates = [
     'DB_PASSWORD' => '',
     'LOG_LEVEL' => 'error',
 ];
+
 
 if (file_exists($envPath)) {
     $envContent = file_get_contents($envPath);

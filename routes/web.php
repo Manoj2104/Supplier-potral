@@ -34,21 +34,30 @@ Route::get('/supplier/download-app', function () {
 })->name('supplier.download-app');
 
 Route::get('/', function () {
-    if (str_contains(request()->getHost(), 'onrender.com') || str_contains(request()->getHost(), 'supplier') || env('PORTAL_MODE') === 'supplier' || env('APP_ENV') === 'production') {
+    $host = request()->getHost();
+    if (!in_array($host, ['127.0.0.1', 'localhost']) && (str_contains($host, 'onrender.com') || str_contains($host, 'supplier') || env('PORTAL_MODE') === 'supplier')) {
         return redirect()->route('supplier.dashboard');
     }
     return view('welcome');
 });
 
 Route::get('/login', function () {
-    if (str_contains(request()->getHost(), 'onrender.com') || str_contains(request()->getHost(), 'supplier') || env('PORTAL_MODE') === 'supplier' || env('APP_ENV') === 'production') {
+    $host = request()->getHost();
+    if (!in_array($host, ['127.0.0.1', 'localhost']) && (str_contains($host, 'onrender.com') || str_contains($host, 'supplier') || env('PORTAL_MODE') === 'supplier')) {
         return redirect()->route('supplier.login');
     }
     return redirect('/#/login');
 });
 
-// Top-level aliases for direct navigation (e.g. /dashboard -> /supplier/dashboard)
-Route::get('/dashboard', fn() => redirect()->route('supplier.dashboard'));
+// Top-level aliases — check PORTAL_MODE to decide where to route
+// POS mode (local installs): go to React SPA /#/app/dashboard
+// Supplier mode (Render/cloud): go to supplier dashboard
+Route::get('/dashboard', function () {
+    if (env('PORTAL_MODE', 'pos') === 'supplier') {
+        return redirect()->route('supplier.dashboard');
+    }
+    return redirect('/#/app/dashboard');
+});
 Route::get('/my-approvals', fn() => redirect()->route('supplier.my-approvals'));
 Route::get('/purchase-orders', fn() => redirect()->route('supplier.purchase-orders.index'));
 Route::get('/purchase-orders/{id}', fn($id) => redirect()->route('supplier.purchase-orders.show', $id));
@@ -1220,6 +1229,9 @@ Route::prefix('api/saas')->group(function () {
     Route::get('/backup/download-zip', [\App\Http\Controllers\SaaSController::class, 'downloadZip'])->name('saas.backup.download-zip');
     Route::post('/backup/restore', [\App\Http\Controllers\SaaSController::class, 'restoreBackup'])->name('saas.backup.restore');
     Route::post('/backup/auto-vault', [\App\Http\Controllers\SaaSController::class, 'autoVaultSync'])->name('saas.backup.auto-vault');
+    Route::get('/devices', [\App\Http\Controllers\SaaSController::class, 'getDevices'])->name('saas.devices');
+    Route::post('/devices/deauthorize', [\App\Http\Controllers\SaaSController::class, 'deauthorizeDevice'])->name('saas.devices.deauthorize');
+    Route::post('/devices/reset-binding', [\App\Http\Controllers\SaaSController::class, 'resetDeviceBinding'])->name('saas.devices.reset-binding');
 });
 
 
