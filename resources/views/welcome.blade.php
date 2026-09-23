@@ -6,6 +6,9 @@
         <title>INFY-POS Enterprise</title>
         <link rel="icon" type="image/x-icon" href="/favicon.ico">
         <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+        <!-- Preload Empty State Mascot & Package for 0ms instant display -->
+        <link rel="preload" as="image" href="/images/pos_empty_manager.webp" type="image/webp" fetchpriority="high">
+        <link rel="preload" as="image" href="/images/pos_empty_package.webp" type="image/webp" fetchpriority="high">
         <!-- Fonts (Non-blocking asynchronous load) -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -62,7 +65,10 @@
             }
 
             /* When sidebar is collapsed (70px) */
-            .esb-sidebar.collapsed ~ .d-flex.flex-column.flex-row-fluid {
+            .esb-sidebar.collapsed ~ .d-flex.flex-column.flex-row-fluid,
+            .sa-sidebar.collapsed ~ .d-flex.flex-column.flex-row-fluid,
+            .sa-root.sidebar-collapsed .d-flex.flex-column.flex-row-fluid,
+            .sa-root.sidebar-collapsed .sa-main-content {
                 width: calc(100vw - 70px) !important;
                 max-width: calc(100vw - 70px) !important;
             }
@@ -109,7 +115,9 @@
             }
 
             .esb-sidebar.collapsed ~ .d-flex.flex-column.flex-row-fluid header,
-            .esb-sidebar.collapsed ~ .d-flex.flex-column.flex-row-fluid .header {
+            .esb-sidebar.collapsed ~ .d-flex.flex-column.flex-row-fluid .header,
+            .sa-sidebar.collapsed ~ .d-flex.flex-column.flex-row-fluid header,
+            .sa-root.sidebar-collapsed .sa-top-header {
                 left: 70px !important;
                 width: calc(100vw - 70px) !important;
                 max-width: calc(100vw - 70px) !important;
@@ -224,10 +232,203 @@
                 animation: prodShimmer 1.4s ease infinite !important;
                 display: inline-block;
             }
+
+            .btn-restart-update-pill {
+                background: #0080FF !important;
+                color: #FFFFFF !important;
+                border: none !important;
+                border-radius: 9999px !important;
+                padding: 6px 18px !important;
+                font-size: 12.5px !important;
+                font-weight: 700 !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+                cursor: pointer !important;
+                box-shadow: 0 3px 12px rgba(0, 128, 255, 0.45) !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 6px !important;
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                margin: 0 10px !important;
+                outline: none !important;
+                white-space: nowrap !important;
+                letter-spacing: 0.1px !important;
+            }
+            .btn-restart-update-pill:hover {
+                background: #006EDB !important;
+                transform: scale(1.04) !important;
+                box-shadow: 0 5px 16px rgba(0, 128, 255, 0.6) !important;
+            }
+            .btn-restart-update-pill:active {
+                transform: scale(0.97) !important;
+            }
+
+            /* ── Universal Page Section Heading & Breadcrumbs Typography ── */
+            .brand-title-group h1,
+            .brand-title-group h2,
+            .cat-title-group h1,
+            .cat-title-group h2,
+            .var-title-group h1,
+            .var-title-group h2,
+            .unit-title-group h1,
+            .unit-title-group h2,
+            .shp-title-group h1,
+            .shp-title-group h2,
+            .sp-title-group h1,
+            .sp-title-group h2,
+            .ps-title-group h1,
+            .ps-title-group h2,
+            .mail-title-group h1,
+            .mail-title-group h2,
+            .sale-detail-title-group h1,
+            .crm-title,
+            .qd-title-row h1,
+            [class*="-title-group"] h1,
+            [class*="-title-group"] h2 {
+                font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+                font-size: 22px !important;
+                font-weight: 800 !important;
+                color: #0F172A !important;
+                letter-spacing: -0.025em !important;
+                line-height: 1.25 !important;
+                margin: 0 0 4px 0 !important;
+            }
+
+            .brand-title-group p,
+            .cat-title-group p,
+            .var-title-group p,
+            .unit-title-group p,
+            .shp-title-group p,
+            .sp-title-group p,
+            .ps-title-group p,
+            .mail-title-group p,
+            .sale-detail-title-group p,
+            .crm-sub,
+            .qd-subtitle,
+            [class*="-title-group"] p {
+                font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+                font-size: 13px !important;
+                font-weight: 400 !important;
+                color: #64748B !important;
+                line-height: 1.45 !important;
+                margin: 0 !important;
+                max-width: 850px !important;
+            }
+
+            .brand-breadcrumb,
+            .cat-breadcrumb,
+            .var-breadcrumb,
+            .unit-breadcrumb,
+            .mail-breadcrumb,
+            .sp-breadcrumb,
+            .qd-breadcrumb,
+            [class*="-breadcrumb"] {
+                display: flex !important;
+                align-items: center !important;
+                gap: 6px !important;
+                font-size: 12.5px !important;
+                font-weight: 500 !important;
+                color: #64748B !important;
+                margin-bottom: 8px !important;
+            }
+
+            .brand-crumb-active,
+            .cat-crumb-active,
+            .var-crumb-active,
+            .unit-crumb-active,
+            .mail-crumb-active,
+            .sp-crumb-active,
+            .qd-crumb-active,
+            [class*="-crumb-active"] {
+                color: #15803D !important;
+                font-weight: 700 !important;
+            }
         </style>
     </head>
     <body class="antialiased">
     <div id="root"></div>
+
+    <!-- ── In-App Update Engine ── -->
+    <script>
+    (function() {
+        var updateBtn = null;
+        var updateModal = null;
+        var updateData = null;
+
+        function checkUpdateStatus() {
+            fetch('/api/check-update', { headers: { 'Accept': 'application/json' } })
+                .then(function(r) { return r.json(); })
+                .then(function(res) {
+                    if (res && res.success && res.data && res.data.update_available) {
+                        updateData = res.data;
+                        renderUpdateBtn();
+                    } else if (updateBtn) {
+                        updateBtn.remove();
+                        updateBtn = null;
+                    }
+                })
+                .catch(function() {});
+        }
+
+        function renderUpdateBtn() {
+            if (updateBtn && document.body.contains(updateBtn)) return;
+
+            // Target header container
+            var targetContainer = document.querySelector('.esb-nav-actions') ||
+                                  document.querySelector('.navbar-nav') ||
+                                  document.querySelector('header');
+
+            if (!targetContainer) {
+                setTimeout(renderUpdateBtn, 600);
+                return;
+            }
+
+            if (!updateBtn) {
+                updateBtn = document.createElement('button');
+                updateBtn.type = 'button';
+                updateBtn.className = 'btn-restart-update-pill';
+                updateBtn.innerHTML = 'Restart to Update &rarr;';
+                updateBtn.title = 'New version ' + (updateData ? updateData.latest_version : '') + ' is ready. Click to restart and update.';
+                updateBtn.onclick = handleUpdateClick;
+            }
+
+            if (targetContainer.firstChild) {
+                targetContainer.insertBefore(updateBtn, targetContainer.firstChild);
+            } else {
+                targetContainer.appendChild(updateBtn);
+            }
+        }
+
+        function handleUpdateClick() {
+            if (confirm('A new version ' + (updateData ? updateData.latest_version : '') + ' of INFY-POS Enterprise is available!\n\nRestart now to apply the new version and modern design?\n(Your billing and store data will remain 100% safe)')) {
+                updateBtn.innerHTML = 'Restarting...';
+                updateBtn.style.opacity = '0.7';
+                updateBtn.disabled = true;
+
+                fetch('/api/apply-update', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
+                }).catch(function() {});
+
+                // Signal native desktop WPF application
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({ action: 'restart_to_update' });
+                } else {
+                    setTimeout(function() {
+                        window.location.reload(true);
+                    }, 1200);
+                }
+            }
+        }
+
+        // Start polling for updates
+        document.addEventListener('DOMContentLoaded', checkUpdateStatus);
+        setTimeout(checkUpdateStatus, 1000);
+        setInterval(checkUpdateStatus, 30000);
+    })();
+    </script>
+
     </body>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script type="text/javascript" src="{{ mix('js/app.js') }}"></script>
 </html>

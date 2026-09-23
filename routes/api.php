@@ -16,6 +16,7 @@ use App\Http\Controllers\API\MainProductAPIController;
 use App\Http\Controllers\API\ManageStockAPIController;
 use App\Http\Controllers\API\PermissionController;
 use App\Http\Controllers\API\POSRegisterAPIController;
+use App\Http\Controllers\API\PriceUpdateAPIController;
 use App\Http\Controllers\API\ProductAPIController;
 use App\Http\Controllers\API\ProductImageSearchAPIController;
 use App\Http\Controllers\API\ProductExtractorAPIController;
@@ -55,7 +56,7 @@ use Illuminate\Support\Facades\Route;
 //    return $request->user();
 //});
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'license.active'])->group(function () {
     //    Route::middleware('permission:manage_brands')->group(function () {
     Route::post('/brands', [BrandAPIController::class, 'store']);
     Route::get('/brands/{id}', [BrandAPIController::class, 'show'])->name('brands.show');
@@ -127,6 +128,10 @@ Route::middleware('auth:sanctum')->group(function () {
         'main-products/{product}',
         [MainProductAPIController::class, 'update']
     );
+    Route::get('main-products/{id}/history', [MainProductAPIController::class, 'history']);
+    Route::get('product-edit-logs', [MainProductAPIController::class, 'allHistory']);
+    Route::post('main-products/{id}/update-stock', [MainProductAPIController::class, 'updateStock']);
+    Route::post('products/{id}/update-stock', [MainProductAPIController::class, 'updateStock']);
     Route::delete(
         'products-image-delete/{mediaId}',
         [ProductAPIController::class, 'productImageDelete']
@@ -136,6 +141,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('product-stats', [ProductAPIController::class, 'getProductStats']);
     Route::get('get-all-products', [ProductAPIController::class, 'getAllProducts']);
     Route::get('search-product-images', [ProductImageSearchAPIController::class, 'search']);
+
+    // Enterprise Price Update routes
+    Route::get('price-updates', [PriceUpdateAPIController::class, 'index']);
+    Route::post('price-updates/apply', [PriceUpdateAPIController::class, 'applyBatch']);
+    Route::get('price-updates/history', [PriceUpdateAPIController::class, 'history']);
+    Route::post('price-updates/undo', [PriceUpdateAPIController::class, 'undoBatch']);
+    Route::post('price-updates/import-preview', [PriceUpdateAPIController::class, 'importPreview']);
 
     Route::resource('variations', VariationAPIController::class);
 
@@ -416,12 +428,35 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // POS Register routes
     Route::get('get-register-details', [POSRegisterAPIController::class, 'getRegisterDetails']);
+    Route::get('register-record-details/{id}', [POSRegisterAPIController::class, 'getRegisterRecordDetails']);
     Route::post('register-entry', [POSRegisterAPIController::class, 'entry']);
     Route::post('register-close', [POSRegisterAPIController::class, 'closeRegister']);
     Route::get('register-report', [POSRegisterAPIController::class, 'registerReport']);
 
     // Coupon Code Routes
     Route::resource('coupon-codes', CouponCodeAPIController::class);
+
+    // Dynamic Unique Invoice Number Generator
+    Route::get('next-invoice-number', function () {
+        $saleCode = rtrim(getSettingValue('sale_code') ?: 'SA', '_-');
+        $maxId = (int)(\App\Models\Sale::max('id') ?? 0);
+        $nextId = $maxId + 1;
+        $uniqueInvoice = $saleCode . '-111' . $nextId;
+
+        while (\App\Models\Sale::where('reference_code', $uniqueInvoice)->exists()) {
+            $nextId++;
+            $uniqueInvoice = $saleCode . '-111' . $nextId;
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'next_id' => $nextId,
+                'invoice_number' => $uniqueInvoice,
+            ],
+            'message' => 'Next invoice number fetched successfully'
+        ]);
+    });
 });
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
@@ -517,6 +552,7 @@ Route::prefix('saas-admin')->group(function () {
     Route::get('/keys', [\App\Http\Controllers\SuperAdminController::class, 'getKeys']);
     Route::post('/generate-key', [\App\Http\Controllers\SuperAdminController::class, 'generateKey']);
     Route::post('/revoke-key/{id}', [\App\Http\Controllers\SuperAdminController::class, 'revokeKey']);
+    Route::post('/unsuspend-key/{id}', [\App\Http\Controllers\SuperAdminController::class, 'unsuspendKey']);
     Route::post('/expire-key/{id}', [\App\Http\Controllers\SuperAdminController::class, 'expireKey']);
     Route::delete('/key/{id}', [\App\Http\Controllers\SuperAdminController::class, 'deleteKey']);
     Route::post('/modify-subscription', [\App\Http\Controllers\SuperAdminController::class, 'modifySubscription']);
@@ -557,4 +593,42 @@ Route::post('supplier-payments/import-bank-utr', [\App\Http\Controllers\API\Supp
 Route::post('supplier-payments/{id}/repay', [\App\Http\Controllers\API\SupplierPaymentAPIController::class, 'repay']);
 Route::delete('supplier-payments/{id}', [\App\Http\Controllers\API\SupplierPaymentAPIController::class, 'destroy']);
 
+// POS Terminal Management & Live Verification
+Route::get('pos/terminal/config', [\App\Http\Controllers\API\PosTerminalAPIController::class, 'getConfig']);
+Route::post('pos/terminal/config', [\App\Http\Controllers\API\PosTerminalAPIController::class, 'saveConfig']);
+Route::post('pos/terminal/test-connection', [\App\Http\Controllers\API\PosTerminalAPIController::class, 'testConnection']);
+Route::post('pos/terminal/disconnect', [\App\Http\Controllers\API\PosTerminalAPIController::class, 'disconnectTerminal']);
+Route::post('pos/terminal/session', [\App\Http\Controllers\API\PosTerminalAPIController::class, 'createSession']);
+Route::get('pos/terminal/session/{id}/status', [\App\Http\Controllers\API\PosTerminalAPIController::class, 'getSessionStatus']);
+Route::post('pos/terminal/session/{id}/cancel', [\App\Http\Controllers\API\PosTerminalAPIController::class, 'cancelSession']);
+Route::post('pos/terminal/session/{id}/verify', [\App\Http\Controllers\API\PosTerminalAPIController::class, 'verifySession']);
+Route::get('pos/terminal/logs', [\App\Http\Controllers\API\PosTerminalAPIController::class, 'getLogs']);
+
+// ============================================================
+// Enterprise Server-Authoritative License & Subscription API v1
+// ============================================================
+Route::prefix('v1/license')->group(function () {
+    Route::post('/activate', [\App\Http\Controllers\API\LicenseV1Controller::class, 'activate']);
+    Route::get('/status', [\App\Http\Controllers\API\LicenseV1Controller::class, 'status']);
+    Route::post('/heartbeat', [\App\Http\Controllers\API\LicenseV1Controller::class, 'heartbeat']);
+    Route::post('/renew-lease', [\App\Http\Controllers\API\LicenseV1Controller::class, 'renewLease']);
+    Route::post('/deactivate', [\App\Http\Controllers\API\LicenseV1Controller::class, 'deactivate']);
+    Route::post('/device-replacement', [\App\Http\Controllers\API\LicenseV1Controller::class, 'deviceReplacement']);
+    Route::post('/revalidate', [\App\Http\Controllers\API\LicenseV1Controller::class, 'revalidate']);
+});
+
+Route::prefix('v1/subscription')->group(function () {
+    Route::post('/renew', [\App\Http\Controllers\API\LicenseV1Controller::class, 'renewSubscription']);
+});
+
+// ============================================================
+// Production-Grade Razorpay Subscriptions & Webhook API
+// ============================================================
+Route::prefix('billing/razorpay')->group(function () {
+    Route::post('/subscription', [\App\Http\Controllers\API\RazorpayBillingController::class, 'createSubscription']);
+    Route::post('/verify', [\App\Http\Controllers\API\RazorpayBillingController::class, 'verifyPayment']);
+    Route::post('/cancel', [\App\Http\Controllers\API\RazorpayBillingController::class, 'cancelAutoRenew']);
+});
+
+Route::post('webhooks/razorpay', [\App\Http\Controllers\API\RazorpayBillingController::class, 'webhook']);
 

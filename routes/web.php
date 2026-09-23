@@ -480,9 +480,8 @@ Route::prefix('pda')->name('pda.')->group(function () {
 
 // Custom Warehouse Bins API endpoints for React Admin Page
 Route::get('/api/warehouse-bins', function() {
-    return \Illuminate\Support\Facades\Cache::remember('warehouse_bins_list_v2', 30, function() {
-        $bins = \App\Models\WarehouseBin::orderBy('bin_code')->get();
-        $binCodes = $bins->pluck('bin_code')->toArray();
+    $bins = \App\Models\WarehouseBin::orderBy('bin_code')->get();
+    $binCodes = $bins->pluck('bin_code')->toArray();
         
         $binInvs = \App\Models\BinInventory::with(['product:id,name,code,main_product_id'])
             ->whereIn('bin_code', $binCodes)
@@ -538,8 +537,7 @@ Route::get('/api/warehouse-bins', function() {
             }
             $bin->inventories = $invs;
         }
-        return $bins;
-    });
+        return response()->json($bins);
 });
 
 Route::post('/api/warehouse-bins', function(\Illuminate\Http\Request $request) {
@@ -878,17 +876,7 @@ Route::get('/api/warehouse-bins/putaway-progress/{asnId}', function($asnId) {
 
 // Custom Warehouse Zones API endpoints for React Admin Page
 Route::get('/api/warehouse-zones', function() {
-    return \Illuminate\Support\Facades\Cache::remember('warehouse_zones_list_v2', 60, function() {
-        if (\App\Models\WarehouseZone::count() === 0) {
-            \App\Models\WarehouseZone::insert([
-                ['name' => 'Zone A', 'category' => 'Fast Moving (FMCG)', 'color' => '#2563EB', 'capacity' => 5000],
-                ['name' => 'Zone B', 'category' => 'Bulk Pallet Storage', 'color' => '#10B981', 'capacity' => 8000],
-                ['name' => 'Zone C', 'category' => 'Cold Storage (-18°C)', 'color' => '#F59E0B', 'capacity' => 3000],
-                ['name' => 'Zone D', 'category' => 'High Value Security', 'color' => '#8B5CF6', 'capacity' => 2000],
-            ]);
-        }
-        return \App\Models\WarehouseZone::orderBy('name')->get();
-    });
+    return \App\Models\WarehouseZone::orderBy('name')->get();
 });
 
 Route::post('/api/warehouse-zones', function(\Illuminate\Http\Request $request) {
@@ -930,20 +918,20 @@ Route::get('/api/warehouse-putaway/list', function() {
         if ($binInvs->count() > 0) {
             $locationStr = "Main Warehouse > Zone A > Bins > " . implode(', ', array_unique($binInvs->pluck('bin_code')->toArray()));
         } else {
-            $locationStr = "Main Warehouse > Zone A > Rack 02 > Shelf B > Bins";
+            $locationStr = "Warehouse > Bins";
         }
 
         $items[] = [
             'id' => $asn->id,
             'grn_number' => 'GRN-2026-' . str_pad($asn->id + 120, 5, '0', STR_PAD_LEFT),
-            'po_number' => $po ? ($po->reference_code ?: ('PO-2026-' . str_pad($po->id, 6, '0', STR_PAD_LEFT))) : 'PO-2026-000050',
-            'supplier_name' => $asn->supplier ? $asn->supplier->name : 'Apex Appliance Distributors',
-            'warehouse_name' => $po && $po->warehouse ? $po->warehouse->name : 'Main Warehouse',
+            'po_number' => $po ? ($po->reference_code ?: ('PO-2026-' . str_pad($po->id, 6, '0', STR_PAD_LEFT))) : ('PO-2026-' . str_pad($asn->id, 6, '0', STR_PAD_LEFT)),
+            'supplier_name' => $asn->supplier ? $asn->supplier->name : '—',
+            'warehouse_name' => $po && $po->warehouse ? $po->warehouse->name : '—',
             'receiving_date' => $asn->updated_at ? $asn->updated_at->format('Y-m-d') : date('Y-m-d'),
             'total_accepted' => $expectedUnits,
             'status' => $status,
             'location' => $locationStr,
-            'assigned_user' => 'Manoj S (Warehouse Lead)',
+            'assigned_user' => '—',
             'items' => $po && $po->purchaseItems ? $po->purchaseItems->map(function($pi) {
                 return [
                     'name' => $pi->product ? $pi->product->name : 'Product',
@@ -959,8 +947,7 @@ Route::get('/api/warehouse-putaway/list', function() {
 
 // Master Enterprise Inventory API Endpoint
 Route::get('/api/inventory/master-stock', function() {
-    return \Illuminate\Support\Facades\Cache::remember('master_inventory_stock_v2', 30, function() {
-        try {
+    try {
             $products = \App\Models\Product::with(['productCategory', 'brand'])->get();
             $warehouse = \App\Models\Warehouse::first();
             $whName = $warehouse ? $warehouse->name : 'Main Warehouse';
@@ -1123,7 +1110,6 @@ Route::get('/api/inventory/master-stock', function() {
                 'summary' => []
             ], 500);
         }
-    });
 });
 
 
@@ -1221,8 +1207,8 @@ Route::prefix('api/license')->group(function () {
 Route::prefix('api/saas')->group(function () {
     Route::get('/subscription-status', [\App\Http\Controllers\SaaSController::class, 'status'])->name('saas.status');
     Route::post('/toggle-auto-renew', [\App\Http\Controllers\SaaSController::class, 'toggleAutoRenew'])->name('saas.toggle-auto-renew');
-    Route::post('/payment/initiate', [\App\Http\Controllers\SaaSController::class, 'initiatePayment'])->name('saas.payment.initiate');
-    Route::post('/payment/verify', [\App\Http\Controllers\SaaSController::class, 'verifyPayment'])->name('saas.payment.verify');
+    Route::post('/payment/initiate', [\App\Http\Controllers\API\RazorpayBillingController::class, 'createSubscription'])->name('saas.payment.initiate');
+    Route::post('/payment/verify', [\App\Http\Controllers\API\RazorpayBillingController::class, 'verifyPayment'])->name('saas.payment.verify');
     Route::post('/activate-key', [\App\Http\Controllers\SaaSController::class, 'activateKey'])->name('saas.activate-key');
     Route::post('/backup/now', [\App\Http\Controllers\SaaSController::class, 'createBackup'])->name('saas.backup.now');
     Route::get('/backup/download-sql', [\App\Http\Controllers\SaaSController::class, 'downloadSql'])->name('saas.backup.download-sql');
@@ -1230,6 +1216,8 @@ Route::prefix('api/saas')->group(function () {
     Route::post('/backup/restore', [\App\Http\Controllers\SaaSController::class, 'restoreBackup'])->name('saas.backup.restore');
     Route::post('/backup/auto-vault', [\App\Http\Controllers\SaaSController::class, 'autoVaultSync'])->name('saas.backup.auto-vault');
     Route::get('/devices', [\App\Http\Controllers\SaaSController::class, 'getDevices'])->name('saas.devices');
+    Route::post('/devices/pair', [\App\Http\Controllers\SaaSController::class, 'pairDevice'])->name('saas.devices.pair');
+    Route::post('/devices/generate-pin', [\App\Http\Controllers\SaaSController::class, 'generatePairingPin'])->name('saas.devices.generate-pin');
     Route::post('/devices/deauthorize', [\App\Http\Controllers\SaaSController::class, 'deauthorizeDevice'])->name('saas.devices.deauthorize');
     Route::post('/devices/reset-binding', [\App\Http\Controllers\SaaSController::class, 'resetDeviceBinding'])->name('saas.devices.reset-binding');
 });
