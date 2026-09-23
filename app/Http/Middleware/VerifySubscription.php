@@ -62,14 +62,128 @@ class VerifySubscription
             return redirect('/install');
         }
 
+            // ── BYPASS PREVENTION: IMMEDIATE DB STATUS CHECK ──
+            if ($company->status === 'expired' || $company->status === 'locked' || $company->status === 'revoked') {
+                // Check if company has an active future key in local database (offline resilience)
+                $localFutureKey = \App\Models\ActivationKey::where('company_id', $company->id)
+                    ->where('expires_at', '>', Carbon::now())
+                    ->latest('id')
+                    ->first();
+                $isLocalFuture = ($company->subscription_ends_at && Carbon::parse($company->subscription_ends_at)->isFuture()) || $localFutureKey;
+
+                // Before returning 402, check if company was activated/renewed in Cloud!
+                $cloudActivated = \Illuminate\Support\Facades\Cache::remember('cloud_auto_resurrect_' . $company->id, 3, function () use ($company) {
+                    try {
+                        $trimmedName = trim($company->name);
+                        $compCheck = \App\Services\CloudLicenseServerService::supabaseRequest('/companies?name=ilike.' . urlencode($trimmedName) . '&limit=1');
+                        if (empty($compCheck['data']) && !empty($company->email)) {
+                            $compCheck = \App\Services\CloudLicenseServerService::supabaseRequest('/companies?email=eq.' . urlencode(trim($company->email)) . '&limit=1');
+                        }
+                        if (!empty($compCheck['success'])) {
+                            $cloudComp = $compCheck['data'][0] ?? null;
+                            if ($cloudComp && (strtolower($cloudComp['status'] ?? '') === 'active' || strtolower($cloudComp['status'] ?? '') === 'trial')) {
+                                $subEnds = !empty($cloudComp['subscription_ends_at']) ? Carbon::parse($cloudComp['subscription_ends_at']) : null;
+                                $trialEnds = !empty($cloudComp['trial_ends_at']) ? Carbon::parse($cloudComp['trial_ends_at']) : null;
+                                $effEnds = $subEnds ?: $trialEnds;
+                                if ($effEnds && $effEnds->isFuture()) {
+                                    return [
+                                        'status'     => strtolower($cloudComp['status']),
+                                        'ends_at'    => $effEnds,
+                                        'company_id' => $cloudComp['id'] ?? $company->id,
+                                    ];
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) {}
+                    return null;
+                });
+
+                if ($cloudActivated) {
+                    $company->status = $cloudActivated['status'];
+                    $company->subscription_ends_at = $cloudActivated['ends_at'];
+                    $company->save();
+
+                    $cloudKeyResp = \App\Services\CloudLicenseServerService::supabaseRequest('/activation_keys?company_id=eq.' . (int)($cloudActivated['company_id'] ?? 0) . '&status=eq.active&order=id.desc&limit=1');
+                    $cKeyRow = (!empty($cloudKeyResp['success']) && !empty($cloudKeyResp['data'][0])) ? $cloudKeyResp['data'][0] : null;
+                    $targetKeyCode = $cKeyRow['key_code'] ?? null;
+                    $targetPlanName = $cKeyRow['plan_name'] ?? (($cloudActivated['status'] === 'trial') ? 'INFY-POS FREE TRIAL (14 Days)' : 'INFY-POS PREMIUM (30 Days)');
+
+                    if ($targetKeyCode) {
+                        \App\Models\ActivationKey::where('company_id', $company->id)
+                            ->where('key_code', '!=', $targetKeyCode)
+                            ->update(['status' => 'expired']);
+
+                        $localKey = \App\Models\ActivationKey::where('key_code', $targetKeyCode)->where('company_id', $company->id)->first();
+                        if (!$localKey) {
+                            $localKey = new \App\Models\ActivationKey();
+                            $localKey->company_id = $company->id;
+                            $localKey->key_code   = $targetKeyCode;
+                        }
+                    } else {
+                        $localKey = \App\Models\ActivationKey::where('company_id', $company->id)->where('status', 'active')->latest('id')->first();
+                        if (!$localKey) {
+                            $localKey = new \App\Models\ActivationKey();
+                            $localKey->company_id = $company->id;
+                            $localKey->key_code   = 'INFYPOS-2026-KEY-' . strtoupper(substr(md5(uniqid()), 0, 8));
+                        }
+                    }
+
+                    $localKey->status     = 'active';
+                    $localKey->expires_at = $cloudActivated['ends_at'];
+                    $localKey->plan_name  = $targetPlanName;
+                    $localKey->price      = 499;
+                    $localKey->save();
+
+                    \App\Services\LicenseGuardService::clearCache();
+                    \App\Services\LicenseGuardService::issueLicenseToken($company, $localKey);
+                } elseif ($isLocalFuture) {
+                    // Offline resilience: Local license is legitimately future-dated!
+                    $company->status = 'active';
+                    if ($localFutureKey) {
+                        $company->subscription_ends_at = $localFutureKey->expires_at;
+                        $localFutureKey->status = 'active';
+                        $localFutureKey->save();
+                        \App\Services\LicenseGuardService::issueLicenseToken($company, $localFutureKey);
+                    }
+                    $company->save();
+                } else {
+                    if ($request->is('api/*')) {
+                        return response()->json([
+                            'success'     => false,
+                            'error'       => 'SUBSCRIPTION_EXPIRED',
+                            'error_code'  => 'LICENSE_EXPIRED',
+                            'message'     => 'Your subscription has expired or was terminated by Super Admin. Please renew to continue.',
+                            'billing'     => url('/#/app/subscription'),
+                        ], 402);
+                    }
+                    return redirect('/#/app/subscription');
+                }
+            }
+
             // ── BYPASS PREVENTION: ASYMMETRIC RSA-2048 LICENSEGUARD VALIDATION ──
             $guardResult = \App\Services\LicenseGuardService::validate();
 
             if (!$guardResult['valid']) {
-                $lockReason = $guardResult['message'] ?? 'Subscription Expired / License Locked';
-                $lockStatus = strtolower($guardResult['error_code'] ?? 'expired');
+                // Check if we can auto-issue token for active company
+                $activeKey = \App\Models\ActivationKey::where('company_id', $company->id)->where('status', 'active')->latest('id')->first();
+                if ($company->status === 'active' && $activeKey && $activeKey->expires_at && Carbon::parse($activeKey->expires_at)->isFuture()) {
+                    \App\Services\LicenseGuardService::issueLicenseToken($company, $activeKey);
+                    $guardResult = \App\Services\LicenseGuardService::validate();
+                }
 
-                if ($request->is('api/*')) {
+                if (!$guardResult['valid']) {
+                    $lockReason = $guardResult['message'] ?? 'Subscription Expired / License Locked';
+                    $lockStatus = strtolower($guardResult['error_code'] ?? 'expired');
+
+                    if ($request->is('api/*')) {
+                        return response()->json([
+                            'success'     => false,
+                            'error'       => 'LICENSE_UNAUTHORIZED',
+                            'error_code'  => $guardResult['error_code'] ?? 'UNAUTHORIZED',
+                            'message'     => $lockReason,
+                        ], 403);
+                    }
+
                     return response()->json([
                         'success'     => false,
                         'error'       => 'LICENSE_UNAUTHORIZED',
@@ -77,13 +191,6 @@ class VerifySubscription
                         'message'     => $lockReason,
                     ], 403);
                 }
-
-                return response()->json([
-                    'success'     => false,
-                    'error'       => 'LICENSE_UNAUTHORIZED',
-                    'error_code'  => $guardResult['error_code'] ?? 'UNAUTHORIZED',
-                    'message'     => $lockReason,
-                ], 403);
             }
 
             $status   = $company->status;
