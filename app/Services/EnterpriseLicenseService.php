@@ -249,6 +249,11 @@ KwIDAQAB
                     'unlimited_pos'        => true,
                 ],
             ]);
+        } else {
+            if ($activeKey && !empty($activeKey->plan_name) && $license->plan_name !== $activeKey->plan_name) {
+                $license->plan_name = $activeKey->plan_name;
+                $license->save();
+            }
         }
 
         // Ensure subscription record
@@ -281,8 +286,9 @@ KwIDAQAB
             ]);
         } else {
             // Keep in sync with latest company dates
-            if ($expiresAt && $subscription->expires_at != $expiresAt) {
+            if ($expiresAt && ($subscription->expires_at != $expiresAt || $subscription->next_billing_at != $expiresAt)) {
                 $subscription->expires_at = $expiresAt;
+                $subscription->next_billing_at = $expiresAt;
                 $subscription->status = $expiresAt->isPast() ? 'EXPIRED' : 'ACTIVE';
                 $subscription->save();
             }
@@ -295,7 +301,7 @@ KwIDAQAB
         $installation = LicenseInstallation::where('installation_id', $installationId)->first();
 
         if (!$installation) {
-            LicenseInstallation::create([
+            $installation = LicenseInstallation::create([
                 'license_id'      => $license->license_id,
                 'installation_id' => $installationId,
                 'machine_hash'    => $machineHash,
@@ -309,7 +315,6 @@ KwIDAQAB
         } else {
             $installation->license_id   = $license->license_id;
             $installation->machine_hash = $machineHash;
-            $installation->status       = 'ACTIVE';
             $installation->last_seen_at = Carbon::now();
             $installation->save();
         }
@@ -392,6 +397,11 @@ KwIDAQAB
             ];
         }
 
+        // 1B. Authoritative Cloud Synchronization (throttled by 3s cache)
+        try {
+            CloudLicenseServerService::syncCloudSubscription();
+        } catch (\Throwable $cloudEx) {}
+
         // 2. Fetch License and Subscription
         $license = self::ensureCurrentLicense();
         $subscription = Subscription::where('license_id', $license->license_id)->latest('id')->first();
@@ -444,7 +454,43 @@ KwIDAQAB
         $remainingSeconds = $isExpired ? 0 : max(0, $subExpiresAt->timestamp - $now->timestamp);
 
         // Determine License State
+        $company = Company::first();
         $status = $license->status;
+        $companyStatus = $company ? ($company->status ?? 'active') : 'active';
+        if ($status === 'SUSPENDED' || $status === 'REVOKED' || in_array($companyStatus, ['suspended', 'locked', 'revoked'])) {
+            $latestKey = ActivationKey::latest('id')->first();
+            return [
+                'valid'                     => false,
+                'status'                    => 'suspended',
+                'is_active'                 => false,
+                'is_trial'                  => false,
+                'is_expired'                => false,
+                'is_suspended'              => true,
+                'license_id'                => $license->license_id,
+                'subscription_id'           => 'SUB-' . ($subscription ? $subscription->id : 1),
+                'plan'                      => $license->plan_name ?: 'INFY-POS PREMIUM',
+                'plan_name'                 => $license->plan_name ?: 'INFY-POS PREMIUM',
+                'price'                     => '₹499/Month',
+                'key_code'                  => $latestKey ? $latestKey->key_code : 'INFYPOS-2026-KEY-DEFAULT',
+                'company_name'              => $company->name ?? 'POS Store',
+                'server_time'               => $serverTimeIso,
+                'remaining_seconds'         => 0,
+                'message'                   => 'Account Suspended by Super Admin. All transaction and billing capabilities are temporarily disabled.',
+                'support'                   => [
+                    'phone'    => '+91 86100 06544',
+                    'whatsapp' => 'https://wa.me/918610006544',
+                    'email'    => 'support@infypos.com',
+                ],
+                'security'                  => [
+                    'server_status' => 'CONNECTED',
+                    'license'       => 'SUSPENDED',
+                    'machine'       => 'BOUND',
+                    'lease'         => 'REVOKED',
+                    'clock'         => 'NORMAL',
+                ],
+            ];
+        }
+
         if ($isExpired) {
             $status = 'EXPIRED';
         } elseif ($status === 'ACTIVE' && str_contains(strtolower($license->plan_name), 'trial')) {

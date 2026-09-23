@@ -21,6 +21,8 @@ class VerifySubscription
         'install', 'install/*', 'saas/*', 'landing',
         'api/config', 'api/front-setting', 'api/permissions', 'api/settings', 'api/languages', 'api/languages/*', 'api/currencies', 'api/currencies/*', 'api/report-product-quantity',
         'api/saas/*', 'api/payment/*', 'api/saas-admin/*', 'api/saas-admin', 'api/license/*', 'api/subscription*',
+        'api/v1/license/*', 'api/v1/license', 'api/v1/subscription*', 'api/v1/subscription',
+        'api/billing/*', 'api/billing', 'api/webhooks/*', 'api/webhooks',
     ];
 
     public function handle(Request $request, Closure $next)
@@ -40,20 +42,20 @@ class VerifySubscription
         try {
             DB::connection()->getPdo();
             if (!\Illuminate\Support\Facades\Schema::hasTable('users') || \App\Models\User::count() === 0) {
-                if ($request->is('saas-admin*') || $request->is('api/saas-admin*') || $request->is('api/license*')) {
+                if ($request->is('saas-admin*') || $request->is('api/saas-admin*') || $request->is('api/license*') || $request->is('api/v1/license*')) {
                     return $next($request);
                 }
                 return redirect('/install');
             }
             $company = Company::first();
             if (!$company) {
-                if ($request->is('saas-admin*') || $request->is('api/saas-admin*') || $request->is('api/license*')) {
+                if ($request->is('saas-admin*') || $request->is('api/saas-admin*') || $request->is('api/license*') || $request->is('api/v1/license*')) {
                     return $next($request);
                 }
                 return redirect('/install');
             }
         } catch (\Throwable $e) {
-            if ($request->is('saas-admin*') || $request->is('api/saas-admin*') || $request->is('api/license*')) {
+            if ($request->is('saas-admin*') || $request->is('api/saas-admin*') || $request->is('api/license*') || $request->is('api/v1/license*')) {
                 return $next($request);
             }
             if ($request->expectsJson()) {
@@ -62,8 +64,23 @@ class VerifySubscription
             return redirect('/install');
         }
 
-            // ── BYPASS PREVENTION: IMMEDIATE DB STATUS CHECK ──
-            if ($company->status === 'expired' || $company->status === 'locked' || $company->status === 'revoked') {
+        // ── BYPASS PREVENTION: IMMEDIATE DB STATUS CHECK ──
+        if ($company->status === 'suspended' || $company->status === 'revoked') {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'success'      => false,
+                    'error'        => 'ACCOUNT_SUSPENDED',
+                    'error_code'   => 'ACCOUNT_SUSPENDED',
+                    'status'       => 'suspended',
+                    'is_suspended' => true,
+                    'message'      => 'This terminal account has been suspended by Super Admin.',
+                    'billing'      => url('/#/app/subscription'),
+                ], 403);
+            }
+            return redirect('/#/app/subscription');
+        }
+
+        if ($company->status === 'expired' || $company->status === 'locked') {
                 // Check if company has an active future key in local database (offline resilience)
                 $localFutureKey = \App\Models\ActivationKey::where('company_id', $company->id)
                     ->where('expires_at', '>', Carbon::now())
@@ -74,26 +91,18 @@ class VerifySubscription
                 // Before returning 402, check if company was activated/renewed in Cloud!
                 $cloudActivated = \Illuminate\Support\Facades\Cache::remember('cloud_auto_resurrect_' . $company->id, 3, function () use ($company) {
                     try {
-                        $trimmedName = trim($company->name);
-                        $compCheck = \App\Services\CloudLicenseServerService::supabaseRequest('/companies?name=ilike.' . urlencode($trimmedName) . '&limit=1');
-                        if (empty($compCheck['data']) && !empty($company->email)) {
-                            $compCheck = \App\Services\CloudLicenseServerService::supabaseRequest('/companies?email=eq.' . urlencode(trim($company->email)) . '&limit=1');
-                        }
-                        if (!empty($compCheck['success'])) {
-                            $cloudComp = $compCheck['data'][0] ?? null;
-                            if ($cloudComp && (strtolower($cloudComp['status'] ?? '') === 'active' || strtolower($cloudComp['status'] ?? '') === 'trial')) {
+                        $cloudComp = \App\Services\CloudLicenseServerService::findCompanyRecord($company);
+                        if ($cloudComp && (strtolower($cloudComp['status'] ?? '') === 'active' || strtolower($cloudComp['status'] ?? '') === 'trial')) {
                                 $subEnds = !empty($cloudComp['subscription_ends_at']) ? Carbon::parse($cloudComp['subscription_ends_at']) : null;
                                 $trialEnds = !empty($cloudComp['trial_ends_at']) ? Carbon::parse($cloudComp['trial_ends_at']) : null;
                                 $effEnds = $subEnds ?: $trialEnds;
                                 if ($effEnds && $effEnds->isFuture()) {
                                     return [
-                                        'status'     => strtolower($cloudComp['status']),
-                                        'ends_at'    => $effEnds,
-                                        'company_id' => $cloudComp['id'] ?? $company->id,
+                                        'status'  => strtolower($cloudComp['status']),
+                                        'ends_at' => $effEnds,
                                     ];
                                 }
                             }
-                        }
                     } catch (\Throwable $e) {}
                     return null;
                 });
@@ -103,38 +112,17 @@ class VerifySubscription
                     $company->subscription_ends_at = $cloudActivated['ends_at'];
                     $company->save();
 
-                    $cloudKeyResp = \App\Services\CloudLicenseServerService::supabaseRequest('/activation_keys?company_id=eq.' . (int)($cloudActivated['company_id'] ?? 0) . '&status=eq.active&order=id.desc&limit=1');
-                    $cKeyRow = (!empty($cloudKeyResp['success']) && !empty($cloudKeyResp['data'][0])) ? $cloudKeyResp['data'][0] : null;
-                    $targetKeyCode = $cKeyRow['key_code'] ?? null;
-                    $targetPlanName = $cKeyRow['plan_name'] ?? (($cloudActivated['status'] === 'trial') ? 'INFY-POS FREE TRIAL (14 Days)' : 'INFY-POS PREMIUM (30 Days)');
-
-                    if ($targetKeyCode) {
-                        \App\Models\ActivationKey::where('company_id', $company->id)
-                            ->where('key_code', '!=', $targetKeyCode)
-                            ->update(['status' => 'expired']);
-
-                        $localKey = \App\Models\ActivationKey::where('key_code', $targetKeyCode)->where('company_id', $company->id)->first();
-                        if (!$localKey) {
-                            $localKey = new \App\Models\ActivationKey();
-                            $localKey->company_id = $company->id;
-                            $localKey->key_code   = $targetKeyCode;
-                        }
-                    } else {
-                        $localKey = \App\Models\ActivationKey::where('company_id', $company->id)->where('status', 'active')->latest('id')->first();
-                        if (!$localKey) {
-                            $localKey = new \App\Models\ActivationKey();
-                            $localKey->company_id = $company->id;
-                            $localKey->key_code   = 'INFYPOS-2026-KEY-' . strtoupper(substr(md5(uniqid()), 0, 8));
-                        }
+                    $localKey = \App\Models\ActivationKey::where('company_id', $company->id)->where('status', 'active')->latest('id')->first();
+                    if (!$localKey) {
+                        $localKey = new \App\Models\ActivationKey();
+                        $localKey->company_id = $company->id;
+                        $localKey->key_code   = 'INFYPOS-2026-KEY-' . strtoupper(substr(md5(uniqid()), 0, 8));
+                        $localKey->status     = 'active';
+                        $localKey->expires_at = $cloudActivated['ends_at'];
+                        $localKey->plan_name  = ($cloudActivated['status'] === 'trial') ? 'INFY-POS FREE TRIAL (14 Days)' : 'INFY-POS PREMIUM (30 Days)';
+                        $localKey->price      = 499;
+                        $localKey->save();
                     }
-
-                    $localKey->status     = 'active';
-                    $localKey->expires_at = $cloudActivated['ends_at'];
-                    $localKey->plan_name  = $targetPlanName;
-                    $localKey->price      = 499;
-                    $localKey->save();
-
-                    \App\Services\LicenseGuardService::clearCache();
                     \App\Services\LicenseGuardService::issueLicenseToken($company, $localKey);
                 } elseif ($isLocalFuture) {
                     // Offline resilience: Local license is legitimately future-dated!
