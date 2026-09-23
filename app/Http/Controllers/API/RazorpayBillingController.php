@@ -42,18 +42,26 @@ class RazorpayBillingController extends Controller
         $orderId = null;
 
         if ($isLiveCredentials) {
-            // Attempt Razorpay Recurring Subscription (AutoPay)
-            $subRes = RazorpayService::createSubscription(null, 12, 1, [
-                'company_id'   => (string)$company->id,
-                'company_name' => $company->name,
-            ]);
+            $subsUnsupported = \Illuminate\Support\Facades\Cache::get('razorpay_subscriptions_unsupported', false);
+            if (!$subsUnsupported) {
+                // Attempt Razorpay Recurring Subscription (AutoPay)
+                $subRes = RazorpayService::createSubscription(null, 12, 1, [
+                    'company_id'   => (string)$company->id,
+                    'company_name' => $company->name,
+                ]);
 
-            if (!empty($subRes['id'])) {
-                $subscriptionId = $subRes['id'];
-            } else {
-                // Fallback to Razorpay Order
+                if (!empty($subRes['id'])) {
+                    $subscriptionId = $subRes['id'];
+                } elseif (isset($subRes['http_code']) && $subRes['http_code'] === 401) {
+                    \Illuminate\Support\Facades\Cache::put('razorpay_subscriptions_unsupported', true, 86400);
+                }
+            }
+
+            if (!$subscriptionId) {
+                // Fallback to direct Razorpay Order (UPI, Cards, NetBanking, QR)
                 $orderRes = RazorpayService::createOrder($amountPaise, 'inv_' . time(), [
-                    'company_id' => (string)$company->id,
+                    'company_id'   => (string)$company->id,
+                    'company_name' => $company->name,
                 ]);
                 if (!empty($orderRes['id'])) {
                     $orderId = $orderRes['id'];
