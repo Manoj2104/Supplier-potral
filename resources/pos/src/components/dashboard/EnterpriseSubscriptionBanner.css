@@ -1270,8 +1270,8 @@
 }
 
 /* ============================================================
-   INFY-POS 1:1 ULTRA-PREMIUM PAYMENT MODAL SYSTEM
-   Matches media_1790234647836.png Pixel-for-Pixel
+   INFY-POS 1:1 ULTRA-PREMIUM UPI QR CHECKOUT SYSTEM
+   Matches media_1790239102710.jpg Pixel-for-Pixel
    ============================================================ */
 
 .infy-pay-backdrop {
@@ -1297,7 +1297,7 @@
     background: #FFFFFF;
     border-radius: 24px;
     width: 100%;
-    max-width: 960px;
+    max-width: 980px;
     min-height: 590px;
     display: flex;
     box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.12);
@@ -1307,10 +1307,10 @@
 
 /* ── LEFT DARK GREEN SIDEBAR ── */
 .infy-pay-left-sidebar {
-    width: 370px;
+    width: 380px;
     flex-shrink: 0;
     background: linear-gradient(155deg, #021a12 0%, #064e3b 55%, #032b21 100%);
-    padding: 30px 26px;
+    padding: 28px 24px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -1334,55 +1334,57 @@
 .infy-pay-brand-header {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
 }
 
-.infy-pay-brand-icon {
+.infy-pay-brand-icon-cluster {
     width: 28px;
     height: 28px;
-    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .infy-pay-brand-text {
-    font-size: 20px;
+    font-size: 17px;
     font-weight: 800;
     color: #FFFFFF;
-    letter-spacing: -0.4px;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
 }
 
 .infy-pay-brand-sub {
     font-size: 11px;
     color: #A7F3D0;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 4px;
     font-weight: 500;
+    margin-top: 2px;
 }
 
 .infy-pay-main-title {
-    font-size: 21px;
+    font-size: 22px;
     font-weight: 800;
     color: #FFFFFF;
     letter-spacing: -0.4px;
-    margin: 22px 0 6px 0;
+    margin: 20px 0 6px 0;
+}
+
+.infy-pay-main-title .highlight-green {
+    color: #10B981;
 }
 
 .infy-pay-main-subtitle {
     font-size: 12.5px;
     color: #94A3B8;
     line-height: 1.45;
-    margin: 0 0 20px 0;
+    margin: 0 0 18px 0;
 }
 
 /* ── PLAN CARD (WHITE CONTAINER) ── */
 .infy-pay-plan-card {
     background: #FFFFFF;
     border-radius: 18px;
-    padding: 18px 20px;
+    padding: 16px 18px;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25);
     color: #0F172A;
 }
@@ -1391,12 +1393,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
 .infy-pay-crown-box {
-    width: 44px;
-    height: 44px;
+    width: 42px;
+    height: 42px;
     border-radius: 12px;
     background: #FEF3C7;
     display: flex;
@@ -1415,16 +1417,16 @@
 }
 
 .infy-pay-plan-price {
-    font-size: 19px;
+    font-size: 18px;
     font-weight: 800;
     color: #0F172A;
-    letter-spacing: -0.4px;
+    letter-spacing: -0.3px;
 }
 
 .infy-pay-plan-badge {
     background: #059669;
     color: #FFFFFF;
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 700;
     padding: 3px 10px;
     border-radius: 9999px;
@@ -1433,10 +1435,10 @@
 .infy-pay-features-list {
     list-style: none;
     padding: 0;
-    margin: 0 0 14px 0;
+    margin: 0 0 12px 0;
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 6.5px;
 }
 
 .infy-pay-feature-item {
@@ -1450,14 +1452,14 @@
 
 .infy-pay-check-icon {
     color: #10B981;
-    font-size: 14px;
+    font-size: 13.5px;
     flex-shrink: 0;
 }
 
 .infy-pay-price-breakdown {
     border-top: 1px solid #F1F5F9;
-    padding-top: 12px;
-    margin-top: 12px;
+    padding-top: 10px;
+    margin-top: 10px;
 }
 
 .infy-pay-price-row {
@@ -1466,7 +1468,7 @@
     justify-content: space-between;
     font-size: 12px;
     color: #64748B;
-    margin-bottom: 6px;
+    margin-bottom: 5px;
 }
 
 .infy-pay-price-total {
@@ -1479,7 +1481,7 @@
 }
 
 .infy-pay-total-label {
-    font-size: 15px;
+    font-size: 14.5px;
     font-weight: 800;
     color: #0F172A;
 }
@@ -1487,7 +1489,7 @@
 .infy-pay-total-value {
     font-size: 18px;
     font-weight: 800;
-    color: #0F172A;
+    color: #059669;
 }
 
 /* ── BOTTOM SECURITY CARD ── */
@@ -1496,7 +1498,7 @@
     border: 1px solid #A7F3D0;
     border-radius: 12px;
     padding: 12px 14px;
-    margin-top: 16px;
+    margin-top: 14px;
     display: flex;
     align-items: flex-start;
     gap: 10px;
@@ -1504,7 +1506,7 @@
 
 .infy-pay-sec-icon {
     color: #059669;
-    font-size: 20px;
+    font-size: 19px;
     flex-shrink: 0;
     margin-top: 2px;
 }
@@ -1526,7 +1528,7 @@
 .infy-pay-right-panel {
     flex: 1;
     background: #FFFFFF;
-    padding: 28px 30px;
+    padding: 26px 28px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -1536,11 +1538,11 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 22px;
+    margin-bottom: 18px;
 }
 
 .infy-pay-top-title {
-    font-size: 19px;
+    font-size: 20px;
     font-weight: 800;
     color: #0F172A;
     letter-spacing: -0.3px;
@@ -1565,7 +1567,7 @@
     color: #334155;
     font-size: 12px;
     font-weight: 700;
-    padding: 6px 12px;
+    padding: 5px 11px;
     border-radius: 8px;
     display: flex;
     align-items: center;
@@ -1593,240 +1595,156 @@
     color: #0F172A;
 }
 
-/* ── METHODS SPLIT VIEW ── */
-.infy-pay-body-split {
-    display: flex;
-    gap: 20px;
-    flex: 1;
+/* ── TWO CARDS ROW (QR + HOW TO PAY) ── */
+.infy-upi-cards-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.05fr;
+    gap: 14px;
+    margin-bottom: 14px;
 }
 
-.infy-pay-methods-list {
-    width: 190px;
-    flex-shrink: 0;
+.infy-upi-qr-box {
+    border: 1px solid #E2E8F0;
+    border-radius: 16px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-}
-
-.infy-pay-method-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid #F1F5F9;
-    background: #FFFFFF;
-    cursor: pointer;
-    transition: all 0.16s ease;
-    text-align: left;
-    width: 100%;
-}
-
-.infy-pay-method-item:hover {
-    background: #F8FAFC;
-    border-color: #E2E8F0;
-}
-
-.infy-pay-method-item.active {
-    background: #F0FDF4;
-    border-color: #10B981;
-    border-width: 1.5px;
-}
-
-.infy-pay-method-icon-box {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    background: #F1F5F9;
-    display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    color: #0F172A;
-    flex-shrink: 0;
-}
-
-.infy-pay-method-item.active .infy-pay-method-icon-box {
-    background: #DCFCE7;
-    color: #059669;
-}
-
-.infy-pay-method-item-text {
-    flex: 1;
-    margin-left: 10px;
-}
-
-.infy-pay-method-name {
-    font-size: 13px;
-    font-weight: 700;
-    color: #0F172A;
-    line-height: 1.2;
-}
-
-.infy-pay-method-item.active .infy-pay-method-name {
-    color: #065F46;
-}
-
-.infy-pay-method-sub {
-    font-size: 10.5px;
-    color: #64748B;
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 105px;
-}
-
-.infy-pay-method-arrow {
-    color: #10B981;
-    font-size: 13px;
-    font-weight: 700;
-    margin-left: 4px;
-}
-
-/* ── METHOD DETAIL PANE ── */
-.infy-pay-detail-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-
-.infy-pay-detail-header h4 {
-    margin: 0 0 3px 0;
-    font-size: 15px;
-    font-weight: 800;
-    color: #0F172A;
-}
-
-.infy-pay-detail-header p {
-    margin: 0 0 14px 0;
-    font-size: 12px;
-    color: #64748B;
-}
-
-/* ── UPI SCAN CARD ── */
-.infy-pay-qr-card {
-    border: 1px solid #E2E8F0;
-    border-radius: 14px;
-    padding: 12px 14px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
     background: #FFFFFF;
+    text-align: center;
 }
 
-.infy-pay-qr-code-wrapper {
-    width: 116px;
-    height: 116px;
-    flex-shrink: 0;
-    border-radius: 10px;
+.infy-upi-qr-image-wrapper {
+    width: 150px;
+    height: 150px;
+    border-radius: 12px;
     border: 1px solid #F1F5F9;
     padding: 6px;
     background: #FFFFFF;
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.infy-pay-scan-info {
-    background: #F0FDF4;
-    border: 1px solid #DCFCE7;
-    border-radius: 10px;
-    padding: 10px 12px;
-    flex: 1;
-}
-
-.infy-pay-scan-title {
-    font-size: 12.5px;
+.infy-upi-scan-pay-text {
+    font-size: 13.5px;
     font-weight: 800;
-    color: #15803D;
-    margin-bottom: 3px;
-}
-
-.infy-pay-scan-desc {
-    font-size: 11px;
-    color: #166534;
-    line-height: 1.35;
-    margin-bottom: 8px;
-}
-
-.infy-pay-apps-row {
+    color: #0F172A;
+    margin: 9px 0 7px 0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
 }
 
-.infy-pay-app-pill {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 6px;
-    height: 24px;
-    padding: 0 6px;
+.infy-upi-scan-pay-amount {
+    color: #059669;
+    font-weight: 800;
+}
+
+.infy-upi-apps-row {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
-    font-weight: 700;
-    color: #0F172A;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    gap: 8px;
 }
 
-.infy-pay-divider {
-    text-align: center;
-    position: relative;
-    margin: 12px 0;
-}
-
-.infy-pay-divider::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: #E2E8F0;
-    z-index: 1;
-}
-
-.infy-pay-divider span {
-    position: relative;
-    z-index: 2;
-    background: #FFFFFF;
-    padding: 0 10px;
+.infy-upi-app-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-size: 11px;
     font-weight: 700;
-    color: #94A3B8;
+    color: #0F172A;
 }
 
-.infy-pay-input-label {
+/* How to Pay Box */
+.infy-upi-how-to-box {
+    background: #F0FDF4;
+    border: 1px solid #DCFCE7;
+    border-radius: 16px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.infy-upi-how-to-title {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: #15803D;
+    margin: 0 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.infy-upi-steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.infy-upi-step-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 11.5px;
+    color: #1E293B;
+    line-height: 1.35;
+}
+
+.infy-upi-step-circle {
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: #059669;
+    color: #FFFFFF;
+    font-size: 10px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* ── FORM FIELDS ── */
+.infy-upi-form-field {
+    margin-bottom: 10px;
+}
+
+.infy-upi-input-label {
     font-size: 12px;
     font-weight: 700;
-    color: #334155;
-    margin-bottom: 6px;
+    color: #0F172A;
+    margin-bottom: 5px;
     display: block;
 }
 
-.infy-pay-input-box {
-    display: flex;
-    align-items: center;
-    border: 1.5px solid #CBD5E1;
-    border-radius: 10px;
-    height: 44px;
-    padding: 0 12px;
-    background: #FFFFFF;
-    transition: all 0.15s ease;
-    margin-bottom: 14px;
+.infy-upi-input-label .required-star {
+    color: #EF4444;
 }
 
-.infy-pay-input-box:focus-within {
+.infy-upi-input-box {
+    border: 1.5px solid #CBD5E1;
+    border-radius: 10px;
+    height: 42px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #FFFFFF;
+    transition: all 0.15s ease;
+}
+
+.infy-upi-input-box:focus-within {
     border-color: #059669;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
 }
 
-.infy-pay-input-box input {
+.infy-upi-input-box input {
     border: none;
     outline: none;
     flex: 1;
@@ -1834,15 +1752,76 @@
     font-weight: 600;
     color: #0F172A;
     background: transparent;
-    margin-left: 8px;
 }
 
-.infy-pay-submit-btn {
+.infy-upi-upload-box {
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #FFFFFF;
+    margin-bottom: 14px;
+}
+
+.infy-upi-upload-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.infy-upi-upload-icon-box {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #F1F5F9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748B;
+    font-size: 15px;
+}
+
+.infy-upi-upload-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+.infy-upi-upload-sub {
+    font-size: 10.5px;
+    color: #64748B;
+    margin-top: 1px;
+}
+
+.infy-upi-upload-btn {
+    border: 1px solid #CBD5E1;
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #334155;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 6px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.infy-upi-upload-btn:hover {
+    background: #F8FAFC;
+    border-color: #94A3B8;
+}
+
+/* ── CTA BUTTON ── */
+.infy-upi-submit-btn {
     width: 100%;
     height: 46px;
     border-radius: 12px;
     border: none;
-    background: #064E3B;
+    background: #059669;
     color: #FFFFFF;
     font-size: 14.5px;
     font-weight: 800;
@@ -1850,66 +1829,49 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    box-shadow: 0 4px 14px rgba(6, 78, 59, 0.25);
+    gap: 10px;
+    box-shadow: 0 4px 14px rgba(5, 150, 105, 0.28);
     transition: all 0.18s ease;
 }
 
-.infy-pay-submit-btn:hover {
-    background: #053b2d;
-    box-shadow: 0 6px 18px rgba(6, 78, 59, 0.35);
+.infy-upi-submit-btn:hover {
+    background: #047857;
+    box-shadow: 0 6px 18px rgba(5, 150, 105, 0.38);
 }
 
-.infy-pay-submit-btn:disabled {
-    opacity: 0.65;
+.infy-upi-submit-btn:disabled {
+    opacity: 0.55;
     cursor: not-allowed;
+    background: #059669;
 }
 
-/* ── TRUST FOOTER ── */
-.infy-pay-trust-footer {
-    border-top: 1px solid #F1F5F9;
-    padding-top: 14px;
-    margin-top: 14px;
+.infy-upi-check-badge {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    color: #059669;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-}
-
-.infy-pay-seals-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-
-.infy-pay-seal {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 10.5px;
-    font-weight: 600;
-    color: #64748B;
-}
-
-.infy-pay-seal-icon {
+    justify-content: center;
     font-size: 12px;
-    color: #475569;
+    font-weight: 900;
 }
 
-.infy-pay-powered-by {
-    font-size: 10.5px;
+/* ── BOTTOM INFO NOTE ── */
+.infy-upi-info-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
     color: #64748B;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-weight: 600;
+    margin-top: 10px;
 }
 
-.infy-pay-powered-logo {
-    font-weight: 800;
-    color: #064E3B;
-    display: flex;
-    align-items: center;
-    gap: 3px;
+.infy-upi-info-note svg {
+    color: #1E3A8A;
+    flex-shrink: 0;
 }
+
 
 

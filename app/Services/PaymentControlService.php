@@ -263,6 +263,9 @@ class PaymentControlService
 
         $setting->system_payment_mode         = trim($data['system_payment_mode'] ?? 'system');
         $setting->system_payment_verification = trim($data['system_payment_verification'] ?? 'automatic');
+        if (isset($data['system_upi_id'])) {
+            $setting->system_upi_id = trim($data['system_upi_id']);
+        }
         $setting->currency                    = strtoupper(trim($data['currency'] ?? 'INR'));
 
         if ($adminId) {

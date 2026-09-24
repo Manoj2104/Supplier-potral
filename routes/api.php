@@ -628,7 +628,13 @@ Route::prefix('billing/razorpay')->group(function () {
     Route::post('/subscription', [\App\Http\Controllers\API\RazorpayBillingController::class, 'createSubscription']);
     Route::post('/verify', [\App\Http\Controllers\API\RazorpayBillingController::class, 'verifyPayment']);
     Route::post('/cancel', [\App\Http\Controllers\API\RazorpayBillingController::class, 'cancelAutoRenew']);
+    Route::post('/cancel-pending', [\App\Http\Controllers\API\RazorpayBillingController::class, 'cancelPendingPayment']);
 });
+
+Route::get('/subscription/current', [\App\Http\Controllers\API\RazorpayBillingController::class, 'getCurrentSubscription']);
+Route::get('/subscription/payments', [\App\Http\Controllers\API\RazorpayBillingController::class, 'getPaymentHistory']);
+Route::post('/payment/create', [\App\Http\Controllers\API\RazorpayBillingController::class, 'createSubscription']);
+Route::post('/payment/cancel-pending', [\App\Http\Controllers\API\RazorpayBillingController::class, 'cancelPendingPayment']);
 
 Route::post('webhooks/razorpay', [\App\Http\Controllers\API\RazorpayBillingController::class, 'webhook']);
 
@@ -658,6 +664,9 @@ Route::prefix('super-admin/payment-settings')->group(function () {
     Route::post('/razorpay/test', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'testRazorpay']);
     Route::post('/system', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'saveSystemPayment']);
     Route::get('/logs', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getLogs']);
+    Route::get('/pending-requests', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getPendingPayments']);
+    Route::post('/verify-request/{id}', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'verifyPaymentRequest']);
+    Route::post('/reject-request/{id}', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'rejectPaymentRequest']);
 });
 
 Route::prefix('saas-admin/payment-settings')->group(function () {
@@ -667,11 +676,17 @@ Route::prefix('saas-admin/payment-settings')->group(function () {
     Route::post('/razorpay/test', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'testRazorpay']);
     Route::post('/system', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'saveSystemPayment']);
     Route::get('/logs', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getLogs']);
+    Route::get('/pending-requests', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getPendingPayments']);
+    Route::post('/verify-request/{id}', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'verifyPaymentRequest']);
+    Route::post('/reject-request/{id}', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'rejectPaymentRequest']);
 });
 
 // Customer-facing authoritative payment provider routing & processing
 Route::prefix('payment')->group(function () {
     Route::get('/provider', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getCustomerProvider']);
+    Route::post('/system/initiate', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'initiateSystemPayment']);
+    Route::post('/system/submit', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'submitSystemPayment']);
+    Route::get('/system/status/{reference}', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getSystemPaymentStatus']);
     Route::post('/system/process', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'processSystemPayment']);
 });
 

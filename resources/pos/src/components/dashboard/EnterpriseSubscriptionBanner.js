@@ -121,12 +121,23 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         system_payment_enabled: false,
     });
     const [showSystemModal, setShowSystemModal] = useState(false);
-    const [processingSystemPayment, setProcessingSystemPayment] = useState(false);
-    const [systemModalMethod, setSystemModalMethod] = useState('upi');
-    const [upiIdInput, setUpiIdInput] = useState('');
-    const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '', name: '' });
-    const [selectedBank, setSelectedBank] = useState('sbi');
-    const [selectedWallet, setSelectedWallet] = useState('phonepe');
+    const [systemUpiData, setSystemUpiData] = useState(null);
+    const [loadingUpiData, setLoadingUpiData] = useState(false);
+    const [utrInput, setUtrInput] = useState('');
+    const [screenshotFile, setScreenshotFile] = useState(null);
+    const [screenshotFileName, setScreenshotFileName] = useState('');
+    const [paymentSubmitted, setPaymentSubmitted] = useState(false);
+    const [submittedDetails, setSubmittedDetails] = useState(null);
+    const [submittingPayment, setSubmittingPayment] = useState(false);
+    const upiFileInputRef = useRef(null);
+
+    // Duplicate Payment Prevention & Active Plan Warning States
+    const [showActiveWarningModal, setShowActiveWarningModal] = useState(false);
+    const [activePlanInfo, setActivePlanInfo] = useState(null);
+    const [showPendingModal, setShowPendingModal] = useState(false);
+    const [pendingPaymentInfo, setPendingPaymentInfo] = useState(null);
+    const [cancellingPending, setCancellingPending] = useState(false);
+    const [isInitiatingPayment, setIsInitiatingPayment] = useState(false);
 
     // Payment History Pagination & Retry States
     const [historyPage, setHistoryPage] = useState(1);
@@ -658,9 +669,51 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         return instantData;
     };
 
+    // Cancel an unexpired pending payment attempt
+    const handleCancelPendingPayment = async (pendingItem) => {
+        if (!pendingItem) return;
+        setCancellingPending(true);
+        try {
+            const res = await axios.post('/api/billing/razorpay/cancel-pending', {
+                sub_id: pendingItem.id,
+                invoice_number: pendingItem.invoice_number,
+            });
+            if (res.data && res.data.success) {
+                showToast(res.data.message || 'Payment attempt cancelled.');
+                setShowPendingModal(false);
+                setPendingPaymentInfo(null);
+                await fetchSubscriptionStatus();
+            } else {
+                showToast(res.data?.message || 'Could not cancel payment attempt.');
+            }
+        } catch (err) {
+            showToast('Cancel failed: ' + (err.response?.data?.message || err.message));
+        } finally {
+            setCancellingPending(false);
+        }
+    };
+
+    // Continue an unexpired pending payment attempt
+    const handleResumePendingPayment = async (pendingItem) => {
+        setShowPendingModal(false);
+        if (!pendingItem) return;
+        await handleRetryPayment(pendingItem);
+    };
+
     // Handle Authoritative Payment Checkout routing based on Super Admin payment provider
-    const handleOpenCheckout = (e) => {
-        if (e) e.preventDefault();
+    const handleOpenCheckout = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+
+        // 1. Authoritative Active Subscription Check on client (Prevent duplicate payments)
+        if (isActive && daysLeft > 6) {
+            setActivePlanInfo({
+                plan_name: resolvedPlanTitle,
+                ends_at: subData.subscription_ends_at || subData.next_billing_date || 'Active',
+                days_remaining: daysLeft,
+            });
+            setShowActiveWarningModal(true);
+            return;
+        }
 
         const currentProvider = providerInfo?.provider || (providerInfo?.razorpay_enabled ? 'razorpay' : 'none');
 
@@ -676,116 +729,219 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
             return;
         }
 
-        // Razorpay Payment Gateway (Instant Checkout)
-        const keyId = providerInfo?.razorpay_key_id || subData?.razorpay_key_id || 'rzp_test_TfUvXTbtZxl0LL';
+        // Double-click lock
+        if (isInitiatingPayment) return;
+        setIsInitiatingPayment(true);
 
-        if (typeof window.Razorpay !== 'function') {
-            alert('Razorpay Checkout SDK is loading. Please check your internet connection and try again.');
+        try {
+            await ensureRazorpayLoaded();
+
+            // 2. Call Backend to initialize / check existing pending / check active subscription
+            const initRes = await axios.post('/api/billing/razorpay/subscription');
+
+            if (!initRes.data || !initRes.data.success) {
+                if (initRes.data?.already_active) {
+                    setActivePlanInfo({
+                        plan_name: initRes.data.plan_name || resolvedPlanTitle,
+                        ends_at: initRes.data.subscription_ends_at || 'Active',
+                        days_remaining: initRes.data.days_remaining || daysLeft,
+                    });
+                    setShowActiveWarningModal(true);
+                } else {
+                    alert(initRes.data?.message || 'Could not initiate checkout. Please try again.');
+                }
+                return;
+            }
+
+            const payData = initRes.data;
+
+            if (payData.reused) {
+                showToast(`Resuming pending session for invoice ${payData.invoice_number}...`);
+            }
+
+            if (typeof window.Razorpay !== 'function') {
+                alert('Razorpay Checkout SDK is loading. Please check your internet connection and try again.');
+                return;
+            }
+
+            const options = {
+                key: payData.key_id,
+                order_id: payData.order_id,
+                subscription_id: payData.subscription_id || undefined,
+                amount: payData.amount || 49900,
+                currency: payData.currency || 'INR',
+                name: 'INFY-POS Enterprise',
+                description: `${payData.plan_name || 'INFY-POS PREMIUM'} (${payData.invoice_number || '30 Days'})`,
+                image: '/images/pos_subscription_hero.png',
+                prefill: payData.prefill || {
+                    name: subData?.owner_name || 'Administrator',
+                    email: subData?.email || 'admin@infypos.local',
+                    contact: subData?.phone || '',
+                },
+                theme: { color: '#059669' },
+                modal: {
+                    ondismiss: function () {
+                        setIsInitiatingPayment(false);
+                    }
+                },
+                handler: async function (response) {
+                    // ⚡ 0ms ULTRA SUPER FAST INSTANT PLAN ACTIVATION
+                    activateSubscriptionOptimistically0ms(response?.razorpay_payment_id, 'Razorpay / UPI / Cards');
+
+                    try {
+                        const verifyRes = await axios.post('/api/billing/razorpay/verify', {
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_order_id: response.razorpay_order_id || payData.order_id,
+                            razorpay_signature: response.razorpay_signature,
+                            razorpay_subscription_id: response.razorpay_subscription_id || payData.subscription_id,
+                            payment_method: 'Razorpay / UPI / Cards',
+                            sub_id: payData.sub_id,
+                            invoice_number: payData.invoice_number,
+                        });
+
+                        if (verifyRes.data && verifyRes.data.success) {
+                            applySubscriptionUpdate(verifyRes.data);
+                            notifyLicenseUpdate(verifyRes.data);
+                            setSubData(prev => ({ ...prev, ...verifyRes.data }));
+                            if (typeof onStatusChange === 'function') {
+                                onStatusChange(verifyRes.data);
+                            }
+                            await fetchPaymentProvider();
+                            await fetchSubscriptionStatus();
+                        }
+                    } catch (err) {
+                        console.warn('Background payment verification:', err);
+                    }
+                }
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (resp) {
+                alert('Payment Failed: ' + (resp.error?.description || 'Transaction was declined'));
+                setIsInitiatingPayment(false);
+            });
+            rzp.open();
+        } catch (err) {
+            if (err.response?.status === 409 && err.response?.data?.already_active) {
+                setActivePlanInfo({
+                    plan_name: err.response.data.plan_name || resolvedPlanTitle,
+                    ends_at: err.response.data.subscription_ends_at || 'Active',
+                    days_remaining: err.response.data.days_remaining || daysLeft,
+                });
+                setShowActiveWarningModal(true);
+            } else {
+                alert('Checkout initialization error: ' + (err.response?.data?.message || err.message));
+            }
+        } finally {
+            setIsInitiatingPayment(false);
+        }
+    };
+
+    // Dynamic System UPI Payment Initiation
+    const initSystemUpiPayment = async () => {
+        setLoadingUpiData(true);
+        try {
+            const res = await axios.post('/api/payment/system/initiate');
+            if (res.data && res.data.success) {
+                setSystemUpiData(res.data);
+            }
+        } catch (err) {
+            console.warn('Failed to initiate UPI payment:', err);
+        } finally {
+            setLoadingUpiData(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showSystemModal) {
+            setPaymentSubmitted(false);
+            setSubmittedDetails(null);
+            setUtrInput('');
+            setScreenshotFile(null);
+            setScreenshotFileName('');
+            initSystemUpiPayment();
+        }
+    }, [showSystemModal]);
+
+    // Handle Completed Payment Submission (Strict Server-Authoritative)
+    const handleCompletedPaymentSubmit = async (e) => {
+        if (e) e.preventDefault();
+        if (!utrInput.trim()) {
+            alert('Please enter your Transaction ID / UTR.');
             return;
         }
 
-        const options = {
-            key: keyId,
-            amount: 49900, // ₹499 in paise
-            currency: 'INR',
-            name: 'INFY-POS Enterprise',
-            description: 'INFY-POS PREMIUM (+30 Days Extension)',
-            image: '/images/pos_subscription_hero.png',
-            prefill: {
-                name: subData?.owner_name || 'Sasti',
-                email: 'sasti@gmail.com',
-                contact: '7848596959',
-            },
-            theme: { color: '#059669' },
-            modal: {
-                ondismiss: function () {
-                    // Modal dismissed by user
-                }
-            },
-            handler: async function (response) {
-                // ⚡ 0ms ULTRA SUPER FAST INSTANT PLAN ACTIVATION
-                activateSubscriptionOptimistically0ms(response?.razorpay_payment_id, 'Razorpay / UPI / Cards');
-
-                try {
-                    const verifyRes = await axios.post('/api/billing/razorpay/verify', {
-                        razorpay_payment_id: response.razorpay_payment_id,
-                        razorpay_order_id: response.razorpay_order_id,
-                        razorpay_signature: response.razorpay_signature,
-                        razorpay_subscription_id: response.razorpay_subscription_id,
-                        payment_method: 'Razorpay / UPI / Cards',
-                    });
-
-                    if (verifyRes.data && verifyRes.data.success) {
-                        applySubscriptionUpdate(verifyRes.data);
-                        notifyLicenseUpdate(verifyRes.data);
-                        setSubData(prev => ({ ...prev, ...verifyRes.data }));
-                        if (typeof onStatusChange === 'function') {
-                            onStatusChange(verifyRes.data);
-                        }
-                        await fetchPaymentProvider();
-                    }
-                } catch (err) {
-                    console.warn('Background payment verification:', err);
-                }
-            }
-        };
-
-        const rzp = new window.Razorpay(options);
-        rzp.on('payment.failed', function (resp) {
-            alert('Payment Failed: ' + (resp.error?.description || 'Transaction was declined'));
-        });
-        rzp.open();
-    };
-
-    // Confirm & Process System Payment Gateway (+30 Days Extension)
-    const handleConfirmSystemPayment = async (overrideMethod) => {
-        const methodToUse = overrideMethod || systemModalMethod || 'UPI';
-        // ⚡ 0ms ULTRA SUPER FAST INSTANT PLAN ACTIVATION
-        activateSubscriptionOptimistically0ms(`SYS-PAY-${Math.random().toString(36).substring(2, 10).toUpperCase()}`, `System Payment (${methodToUse.toUpperCase()})`);
-        setShowSystemModal(false);
-
+        setSubmittingPayment(true);
         try {
-            setProcessingSystemPayment(true);
-            const res = await axios.post('/api/payment/system/process', {
-                plan: 'INFY-POS PREMIUM',
-                amount: 499,
-                total: 588.82,
-                method: methodToUse.toUpperCase(),
-                notes: `System Payment (${methodToUse.toUpperCase()}) - Direct Enterprise License Extension (+30 Days)`
+            const formData = new FormData();
+            formData.append('utr', utrInput.trim());
+            if (systemUpiData?.order_id) {
+                formData.append('order_id', systemUpiData.order_id);
+            }
+            if (screenshotFile) {
+                formData.append('screenshot', screenshotFile);
+            }
+
+            const res = await axios.post('/api/payment/system/submit', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
 
             if (res.data && res.data.success) {
-                localStorage.removeItem('sub_banner_dismissed_until');
-                if (res.data.data) {
-                    applySubscriptionUpdate(res.data.data);
-                    notifyLicenseUpdate(res.data.data);
-                    setSubData(prev => ({ ...prev, ...res.data.data }));
-                }
-                await fetchPaymentProvider();
+                setSubmittedDetails({
+                    order_id: res.data.order_id || systemUpiData?.order_id,
+                    utr: utrInput.trim(),
+                    amount: '₹588.82',
+                    status: 'PENDING'
+                });
+                setPaymentSubmitted(true);
+            } else {
+                alert(res.data?.message || 'Failed to submit payment verification.');
             }
         } catch (err) {
-            console.warn('Background system payment processing:', err);
+            alert(err.response?.data?.message || 'Submission failed. Please try again.');
         } finally {
-            setProcessingSystemPayment(false);
+            setSubmittingPayment(false);
         }
     };
 
-    // Execute Retry for a specific pending payment in the history table
+    // Execute Continue / Retry for a specific payment in the history table
     const handleRetryPayment = async (sub) => {
         if (!sub) return;
         const targetId = sub.id || sub.invoice_number;
+        const isPending = String(sub.status || '').toLowerCase() === 'pending';
+
+        // Check if user already has an active subscription
+        if (isActive && daysLeft > 6 && !isPending) {
+            setActivePlanInfo({
+                plan_name: resolvedPlanTitle,
+                ends_at: subData.subscription_ends_at || subData.next_billing_date || 'Active',
+                days_remaining: daysLeft,
+            });
+            setShowActiveWarningModal(true);
+            return;
+        }
+
         setRetryingSubId(targetId);
         try {
             await ensureRazorpayLoaded();
 
-            // 1. Call Backend to initialize / resume checkout for this specific pending invoice
+            // 1. Call Backend to initialize / resume checkout for this specific invoice
             const initRes = await axios.post('/api/billing/razorpay/subscription', {
                 sub_id: sub.id,
                 invoice_number: sub.invoice_number
             });
 
             if (!initRes.data || !initRes.data.success) {
-                alert('Could not initialize Razorpay checkout. ' + (initRes.data?.message || 'Please try again.'));
+                if (initRes.data?.already_active) {
+                    setActivePlanInfo({
+                        plan_name: initRes.data.plan_name || resolvedPlanTitle,
+                        ends_at: initRes.data.subscription_ends_at || 'Active',
+                        days_remaining: initRes.data.days_remaining || daysLeft,
+                    });
+                    setShowActiveWarningModal(true);
+                } else {
+                    alert('Could not initialize Razorpay checkout. ' + (initRes.data?.message || 'Please try again.'));
+                }
                 setRetryingSubId(null);
                 return;
             }
@@ -800,7 +956,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                 amount: payData.amount || 49900,
                 currency: payData.currency || 'INR',
                 name: 'INFY-POS Enterprise',
-                description: `Retry Payment: ${sub.invoice_number || 'INFY-POS PREMIUM'}`,
+                description: `${isPending ? 'Continue Payment' : 'Retry Payment'}: ${sub.invoice_number || 'INFY-POS PREMIUM'}`,
                 prefill: payData.prefill || {},
                 theme: { color: '#059669' },
                 modal: {
@@ -831,6 +987,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                             if (typeof onStatusChange === 'function') {
                                 onStatusChange(verifyRes.data);
                             }
+                            await fetchSubscriptionStatus();
                         }
                     } catch (err) {
                         console.warn('Background retry verification notice:', err);
@@ -853,7 +1010,16 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                 setRetryingSubId(null);
             }
         } catch (err) {
-            alert('Retry initialization error: ' + (err.response?.data?.message || err.message));
+            if (err.response?.status === 409 && err.response?.data?.already_active) {
+                setActivePlanInfo({
+                    plan_name: err.response.data.plan_name || resolvedPlanTitle,
+                    ends_at: err.response.data.subscription_ends_at || 'Active',
+                    days_remaining: err.response.data.days_remaining || daysLeft,
+                });
+                setShowActiveWarningModal(true);
+            } else {
+                alert('Retry initialization error: ' + (err.response?.data?.message || err.message));
+            }
             setRetryingSubId(null);
         }
     };
@@ -1620,8 +1786,12 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                 </thead>
                                 <tbody>
                                     {(viewAllHistory ? realSubscriptions : realSubscriptions.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)).map((sub, idx) => {
-                                        const isPending = String(sub.status || '').toLowerCase() === 'pending';
-                                        const isFailed = String(sub.status || '').toLowerCase() === 'failed';
+                                        const rawSubStatus = String(sub.raw_status || sub.status || '').toLowerCase();
+                                        const isPending = rawSubStatus === 'pending' || rawSubStatus === 'created';
+                                        const isFailed = rawSubStatus === 'failed';
+                                        const isExpired = rawSubStatus === 'expired';
+                                        const isCancelled = rawSubStatus === 'cancelled';
+                                        const isPaidOrVerified = ['paid', 'verified', 'active'].includes(rawSubStatus);
                                         const isRetryingThis = retryingSubId === (sub.id || sub.invoice_number);
 
                                         return (
@@ -1658,6 +1828,22 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                                             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B' }}></span>
                                                             Pending
                                                         </span>
+                                                    ) : isExpired ? (
+                                                        <span style={{
+                                                            background: '#F1F5F9',
+                                                            color: '#64748B',
+                                                            border: '1px solid #CBD5E1',
+                                                            padding: '3px 10px',
+                                                            borderRadius: '12px',
+                                                            fontSize: '11px',
+                                                            fontWeight: '700',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px'
+                                                        }}>
+                                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#94A3B8' }}></span>
+                                                            Expired
+                                                        </span>
                                                     ) : isFailed ? (
                                                         <span style={{
                                                             background: '#FEF2F2',
@@ -1673,6 +1859,22 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                                         }}>
                                                             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#EF4444' }}></span>
                                                             Failed
+                                                        </span>
+                                                    ) : isCancelled ? (
+                                                        <span style={{
+                                                            background: '#F8FAFC',
+                                                            color: '#64748B',
+                                                            border: '1px solid #E2E8F0',
+                                                            padding: '3px 10px',
+                                                            borderRadius: '12px',
+                                                            fontSize: '11px',
+                                                            fontWeight: '700',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px'
+                                                        }}>
+                                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#64748B' }}></span>
+                                                            Cancelled
                                                         </span>
                                                     ) : (
                                                         <span style={{
@@ -1694,11 +1896,13 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                                 </td>
                                                 <td style={{ padding: '11px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-                                                        {(isPending || isFailed) ? (
+                                                        {isPending ? (
                                                             <button
-                                                                onClick={() => handleRetryPayment(sub)}
-                                                                disabled={isRetryingThis}
-                                                                title="Retry this pending transaction via Razorpay"
+                                                                onClick={() => {
+                                                                    setPendingPaymentInfo(sub);
+                                                                    setShowPendingModal(true);
+                                                                }}
+                                                                title="Continue or review this pending transaction"
                                                                 style={{
                                                                     background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
                                                                     color: '#FFFFFF',
@@ -1707,11 +1911,34 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                                                     padding: '5px 12px',
                                                                     fontSize: '11.5px',
                                                                     fontWeight: '700',
-                                                                    cursor: isRetryingThis ? 'not-allowed' : 'pointer',
+                                                                    cursor: 'pointer',
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
                                                                     gap: '5px',
                                                                     boxShadow: '0 2px 5px rgba(5,150,105,0.25)',
+                                                                    transition: 'all 0.2s ease'
+                                                                }}
+                                                            >
+                                                                <FontAwesomeIcon icon={faRotate} />
+                                                                <span>Continue</span>
+                                                            </button>
+                                                        ) : (isFailed || isExpired || isCancelled) ? (
+                                                            <button
+                                                                onClick={() => handleRetryPayment(sub)}
+                                                                disabled={isRetryingThis}
+                                                                title="Retry this transaction"
+                                                                style={{
+                                                                    background: '#F8FAFC',
+                                                                    color: '#334155',
+                                                                    border: '1px solid #CBD5E1',
+                                                                    borderRadius: '6px',
+                                                                    padding: '5px 12px',
+                                                                    fontSize: '11.5px',
+                                                                    fontWeight: '700',
+                                                                    cursor: isRetryingThis ? 'not-allowed' : 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '5px',
                                                                     transition: 'all 0.2s ease'
                                                                 }}
                                                             >
@@ -3212,12 +3439,12 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                 </div>
             )}
 
-            {/* ── 1:1 ULTRA-PREMIUM PAYMENT MODAL (Matches media_1790234647836.png) ── */}
+            {/* ── PIXEL-PERFECT INFY-POS ENTERPRISE UPI QR PAYMENT MODAL (Exact match to media_1790239102710.jpg) ── */}
             {showSystemModal && (
                 <div
                     className="infy-pay-backdrop"
                     onClick={(e) => {
-                        if (e.target === e.currentTarget && !processingSystemPayment) {
+                        if (e.target === e.currentTarget && !submittingPayment) {
                             setShowSystemModal(false);
                         }
                     }}
@@ -3227,25 +3454,30 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                         {/* ── LEFT DARK GREEN SIDEBAR ── */}
                         <div className="infy-pay-left-sidebar">
                             <div>
-                                {/* Top Brand: Razorpay */}
+                                {/* Top Brand: INFY-POS Enterprise */}
                                 <div className="infy-pay-brand-header">
-                                    <div className="infy-pay-brand-icon">
-                                        <svg width="24" height="28" viewBox="0 0 24 28" fill="none">
-                                            <path d="M14.5 1.5L4 16.5H12L9.5 26.5L20 11.5H12L14.5 1.5Z" fill="#0284C7"/>
+                                    <div className="infy-pay-brand-icon-cluster">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                            <circle cx="12" cy="6.5" r="2.8" fill="#10B981"/>
+                                            <circle cx="16.8" cy="9.2" r="2.8" fill="#10B981"/>
+                                            <circle cx="16.8" cy="14.8" r="2.8" fill="#10B981"/>
+                                            <circle cx="12" cy="17.5" r="2.8" fill="#10B981"/>
+                                            <circle cx="7.2" cy="14.8" r="2.8" fill="#10B981"/>
+                                            <circle cx="7.2" cy="9.2" r="2.8" fill="#10B981"/>
+                                            <circle cx="12" cy="12" r="2.4" fill="#34D399"/>
                                         </svg>
                                     </div>
-                                    <span className="infy-pay-brand-text" style={{ fontStyle: 'italic', fontWeight: '900', letterSpacing: '-0.5px' }}>
-                                        Razorpay
-                                    </span>
-                                </div>
-                                <div className="infy-pay-brand-sub">
-                                    <FontAwesomeIcon icon={faLock} style={{ fontSize: '9px' }} />
-                                    <span>Secure Payments by Razorpay</span>
+                                    <div>
+                                        <div className="infy-pay-brand-text">INFY-POS Enterprise</div>
+                                        <div className="infy-pay-brand-sub">Secure &amp; Reliable POS Solution</div>
+                                    </div>
                                 </div>
 
-                                <h3 className="infy-pay-main-title">Complete Your Payment</h3>
+                                <h3 className="infy-pay-main-title">
+                                    Complete Your <span className="highlight-green">Payment</span>
+                                </h3>
                                 <p className="infy-pay-main-subtitle">
-                                    Activate INFY-POS and unlock the full power of your business.
+                                    Unlock the full power of INFY-POS with our premium subscription.
                                 </p>
 
                                 {/* Plan Card (White container inside dark column) */}
@@ -3253,13 +3485,15 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                     <div className="infy-pay-plan-header">
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                             <div className="infy-pay-crown-box">
-                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                                                     <path d="M2.5 18.5h19v2h-19v-2zm1.2-12l4.8 6 3.5-7.5 3.5 7.5 4.8-6 1.7 10.5H2L3.7 6.5z" fill="#D97706"/>
                                                 </svg>
                                             </div>
                                             <div>
                                                 <div className="infy-pay-plan-title">INFY-POS PREMIUM</div>
-                                                <div className="infy-pay-plan-price">₹499 <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748B' }}>/ Month</span></div>
+                                                <div className="infy-pay-plan-price">
+                                                    ₹499 <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748B' }}>/ Month</span>
+                                                </div>
                                             </div>
                                         </div>
                                         <span className="infy-pay-plan-badge">30 Days</span>
@@ -3276,7 +3510,21 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                             'Free Software Updates'
                                         ].map((feature, idx) => (
                                             <li key={idx} className="infy-pay-feature-item">
-                                                <FontAwesomeIcon icon={faCheckCircle} className="infy-pay-check-icon" />
+                                                <div style={{
+                                                    width: '18px',
+                                                    height: '18px',
+                                                    borderRadius: '50%',
+                                                    background: '#059669',
+                                                    color: '#FFFFFF',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '11px',
+                                                    fontWeight: '900',
+                                                    flexShrink: 0
+                                                }}>
+                                                    ✓
+                                                </div>
                                                 <span>{feature}</span>
                                             </li>
                                         ))}
@@ -3286,14 +3534,14 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                     <div className="infy-pay-price-breakdown">
                                         <div className="infy-pay-price-row">
                                             <span>Subtotal</span>
-                                            <span style={{ fontWeight: '600', color: '#0F172A' }}>₹499.00</span>
+                                            <span style={{ fontWeight: '700', color: '#0F172A' }}>₹499.00</span>
                                         </div>
                                         <div className="infy-pay-price-row">
-                                            <span>GST (18%) <span style={{ fontSize: '10px', color: '#94A3B8' }}>ⓘ</span></span>
-                                            <span style={{ fontWeight: '600' }}>₹89.82</span>
+                                            <span>GST (18%) <span style={{ fontSize: '11px', color: '#94A3B8', cursor: 'help' }}>ⓘ</span></span>
+                                            <span style={{ fontWeight: '700', color: '#0F172A' }}>₹89.82</span>
                                         </div>
                                         <div className="infy-pay-price-total">
-                                            <span className="infy-pay-total-label">Total</span>
+                                            <span className="infy-pay-total-label">Total Amount</span>
                                             <span className="infy-pay-total-value">₹588.82</span>
                                         </div>
                                     </div>
@@ -3302,564 +3550,571 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
 
                             {/* 100% Secure Payment Card */}
                             <div className="infy-pay-security-card">
-                                <FontAwesomeIcon icon={faCheckCircle} className="infy-pay-sec-icon" />
+                                <div style={{
+                                    width: '26px',
+                                    height: '26px',
+                                    borderRadius: '50%',
+                                    background: '#059669',
+                                    color: '#FFFFFF',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '14px',
+                                    fontWeight: '900',
+                                    flexShrink: 0,
+                                    marginTop: '2px'
+                                }}>
+                                    ✓
+                                </div>
                                 <div>
                                     <div className="infy-pay-sec-title">100% Secure Payment</div>
                                     <div className="infy-pay-sec-desc">
-                                        Your payment is processed securely via Razorpay. We never store your card details.
+                                        Pay directly via UPI. Your payment is verified securely before activation.
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         {/* ── RIGHT WHITE PANEL ── */}
-                        <div className="infy-pay-right-panel">
-                            {/* Top Bar */}
-                            <div>
+                        {paymentSubmitted ? (
+                            <div className="infy-pay-right-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '40px 32px' }}>
+                                <div style={{ width: '68px', height: '68px', borderRadius: '50%', background: '#FEF3C7', color: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', marginBottom: '20px' }}>
+                                    ⏳
+                                </div>
+                                <h3 style={{ fontSize: '22px', fontWeight: '800', color: '#0F172A', marginBottom: '8px' }}>
+                                    Payment Submitted — Verification Pending
+                                </h3>
+                                <p style={{ fontSize: '13.5px', color: '#64748B', maxWidth: '440px', lineHeight: 1.5, marginBottom: '24px' }}>
+                                    Thank you! Your payment reference and UTR have been submitted to Super Admin for verification.
+                                </p>
+
+                                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '18px 24px', width: '100%', maxWidth: '440px', textAlign: 'left', marginBottom: '24px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '13px' }}>
+                                        <span style={{ color: '#64748B' }}>Order Reference:</span>
+                                        <span style={{ fontWeight: '700', color: '#0F172A', fontFamily: 'monospace' }}>{submittedDetails?.order_id}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '13px' }}>
+                                        <span style={{ color: '#64748B' }}>Transaction ID / UTR:</span>
+                                        <span style={{ fontWeight: '700', color: '#0F172A', fontFamily: 'monospace' }}>{submittedDetails?.utr}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '13px' }}>
+                                        <span style={{ color: '#64748B' }}>Amount:</span>
+                                        <span style={{ fontWeight: '800', color: '#059669' }}>₹588.82</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #E2E8F0', fontSize: '13px' }}>
+                                        <span style={{ color: '#64748B' }}>Status:</span>
+                                        <span style={{ background: '#FEF3C7', color: '#B45309', padding: '3px 10px', borderRadius: '20px', fontWeight: '700', fontSize: '12px' }}>
+                                            ● Pending Verification
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <p style={{ fontSize: '12px', color: '#94A3B8', maxWidth: '440px', marginBottom: '24px' }}>
+                                    Once verified by Super Admin, your subscription will automatically activate and extend by +30 Days.
+                                </p>
+
+                                <button
+                                    type="button"
+                                    className="infy-upi-submit-btn"
+                                    style={{ maxWidth: '280px' }}
+                                    onClick={() => setShowSystemModal(false)}
+                                >
+                                    Got It, Close
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="infy-pay-right-panel">
+                                {/* Top Bar */}
                                 <div className="infy-pay-top-bar">
                                     <div>
-                                        <h3 className="infy-pay-top-title">Choose Payment Method</h3>
-                                        <div className="infy-pay-top-subtitle">Select your preferred payment method to continue</div>
+                                        <h3 className="infy-pay-top-title">Pay via UPI (QR Code)</h3>
+                                        <div className="infy-pay-top-subtitle">Scan the QR code using any UPI app to make the payment.</div>
                                     </div>
                                     <div className="infy-pay-top-actions">
+                                        <button
+                                            type="button"
+                                            className="infy-pay-close-btn"
+                                            onClick={() => setShowSystemModal(false)}
+                                            title="Close"
+                                        >
+                                            ✕
+                                        </button>
                                         <div className="infy-pay-lang-badge">
                                             <span>🇮🇳</span>
                                             <span>EN</span>
                                             <span style={{ fontSize: '9px', marginLeft: '2px' }}>▼</span>
                                         </div>
-                                        <button
-                                            type="button"
-                                            className="infy-pay-close-btn"
-                                            onClick={() => {
-                                                if (!processingSystemPayment) setShowSystemModal(false);
-                                            }}
-                                        >
-                                            ✕
-                                        </button>
                                     </div>
                                 </div>
 
-                                {/* Body Split: Left Methods List & Right Detail Pane */}
-                                <div className="infy-pay-body-split">
-                                    {/* Left Methods Navigation */}
-                                    <div className="infy-pay-methods-list">
-                                        {/* 1. UPI */}
-                                        <div
-                                            className={`infy-pay-method-item ${systemModalMethod === 'upi' ? 'active' : ''}`}
-                                            onClick={() => setSystemModalMethod('upi')}
-                                        >
-                                            <div className="infy-pay-method-icon-box">
-                                                <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
-                                                    <path d="M18.8 6L11 26h5.2l7.8-20h-5.2z" fill="#00833F"/>
-                                                    <path d="M12.8 6L5 26h5.2l7.8-20h-5.2z" fill="#E86127"/>
+                                {/* Middle Side-by-Side Cards (QR Card on left, How to Pay on right) */}
+                                <div className="infy-upi-cards-grid">
+                                    {/* Left Card: QR Code Box */}
+                                    <div className="infy-upi-qr-box">
+                                        <div className="infy-upi-qr-image-wrapper" style={{ position: 'relative' }}>
+                                            {/* Dynamic QR Code Image */}
+                                            <img
+                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(systemUpiData?.upi_string || 'upi://pay?pa=infypos@icici&pn=INFY-POS+Enterprise&am=588.82&cu=INR')}&margin=2`}
+                                                alt="UPI Payment QR Code"
+                                                style={{ width: '136px', height: '136px', display: 'block', borderRadius: '6px' }}
+                                            />
+                                            {/* Center Google Pay / UPI Icon Overlay Badge */}
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '50%',
+                                                left: '50%',
+                                                transform: 'translate(-50%, -50%)',
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '50%',
+                                                background: '#FFFFFF',
+                                                boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                border: '1.5px solid #FFFFFF'
+                                            }}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                                    <circle cx="12" cy="12" r="10" fill="#FFFFFF"/>
+                                                    <path d="M16 11.5c0-.4-.04-.8-.11-1.2H12v2.3h2.3c-.1.5-.4 1-.8 1.3v1.1h1.3c.8-.7 1.2-1.9 1.2-3.5z" fill="#4285F4"/>
+                                                    <path d="M12 16c1.1 0 2-.4 2.7-1l-1.3-1.1c-.4.3-.9.4-1.4.4-1.1 0-2-.7-2.3-1.7H8.3v1.1C9 15.3 10.4 16 12 16z" fill="#34A853"/>
+                                                    <path d="M9.7 12.6c-.1-.3-.1-.6-.1-.9 0-.3 0-.6.1-.9V9.7H8.3C8 10.4 7.8 11.2 7.8 12c0 .8.2 1.6.5 2.3l1.4-1.7z" fill="#FBBC05"/>
+                                                    <path d="M12 8.8c.6 0 1.1.2 1.6.6l1.2-1.2C14 7.5 13.1 7 12 7 10.4 7 9 7.7 8.3 9.1l1.4 1.1c.3-1 1.2-1.4 2.3-1.4z" fill="#EA4335"/>
                                                 </svg>
                                             </div>
-                                            <div className="infy-pay-method-item-text">
-                                                <div className="infy-pay-method-name">UPI</div>
-                                                <div className="infy-pay-method-sub">Pay with any UPI app</div>
-                                            </div>
-                                            {systemModalMethod === 'upi' && <span className="infy-pay-method-arrow">&gt;</span>}
                                         </div>
 
-                                        {/* 2. Cards */}
-                                        <div
-                                            className={`infy-pay-method-item ${systemModalMethod === 'cards' ? 'active' : ''}`}
-                                            onClick={() => setSystemModalMethod('cards')}
-                                        >
-                                            <div className="infy-pay-method-icon-box">
-                                                <FontAwesomeIcon icon={faCreditCard} style={{ fontSize: '14px' }} />
-                                            </div>
-                                            <div className="infy-pay-method-item-text">
-                                                <div className="infy-pay-method-name">Cards</div>
-                                                <div className="infy-pay-method-sub">Debit / Credit Cards</div>
-                                            </div>
-                                            {systemModalMethod === 'cards' && <span className="infy-pay-method-arrow">&gt;</span>}
+                                        <div className="infy-upi-scan-pay-text">
+                                            Scan &amp; Pay <span className="infy-upi-scan-pay-amount">₹588.82</span>
                                         </div>
 
-                                        {/* 3. Net Banking */}
-                                        <div
-                                            className={`infy-pay-method-item ${systemModalMethod === 'netbanking' ? 'active' : ''}`}
-                                            onClick={() => setSystemModalMethod('netbanking')}
-                                        >
-                                            <div className="infy-pay-method-icon-box">
-                                                <FontAwesomeIcon icon={faBuilding} style={{ fontSize: '14px' }} />
-                                            </div>
-                                            <div className="infy-pay-method-item-text">
-                                                <div className="infy-pay-method-name">Net Banking</div>
-                                                <div className="infy-pay-method-sub">All major banks</div>
-                                            </div>
-                                            {systemModalMethod === 'netbanking' && <span className="infy-pay-method-arrow">&gt;</span>}
-                                        </div>
-
-                                        {/* 4. Wallet */}
-                                        <div
-                                            className={`infy-pay-method-item ${systemModalMethod === 'wallet' ? 'active' : ''}`}
-                                            onClick={() => setSystemModalMethod('wallet')}
-                                        >
-                                            <div className="infy-pay-method-icon-box">
-                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                                                    <line x1="1" y1="10" x2="23" y2="10"></line>
+                                        <div className="infy-upi-apps-row">
+                                            {/* GPay */}
+                                            <div className="infy-upi-app-pill">
+                                                <svg width="13" height="13" viewBox="0 0 24 24">
+                                                    <path fill="#4285F4" d="M23.7 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.6c-.3 1.5-1.1 2.8-2.4 3.7v3h3.9c2.3-2.1 3.6-5.2 3.6-8.9z"/>
+                                                    <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.2v3.1C3.3 21.3 7.4 24 12 24z"/>
+                                                    <path fill="#FBBC05" d="M5.3 14.2c-.2-.7-.4-1.5-.4-2.2s.2-1.5.4-2.2V6.7H1.2C.4 8.3 0 10.1 0 12s.4 3.7 1.2 5.3l4.1-3.1z"/>
+                                                    <path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4C18 1.2 15.2 0 12 0 7.4 0 3.3 2.7 1.2 6.7l4.1 3.1c.9-2.9 3.6-5 6.7-5z"/>
                                                 </svg>
+                                                <span>GPay</span>
                                             </div>
-                                            <div className="infy-pay-method-item-text">
-                                                <div className="infy-pay-method-name">Wallet</div>
-                                                <div className="infy-pay-method-sub">PhonePe, Paytm & more</div>
-                                            </div>
-                                            {systemModalMethod === 'wallet' && <span className="infy-pay-method-arrow">&gt;</span>}
-                                        </div>
 
-                                        {/* 5. EMI */}
-                                        <div
-                                            className={`infy-pay-method-item ${systemModalMethod === 'emi' ? 'active' : ''}`}
-                                            onClick={() => setSystemModalMethod('emi')}
-                                        >
-                                            <div className="infy-pay-method-icon-box">
-                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                                    <line x1="9" y1="9" x2="15" y2="9"></line>
-                                                    <line x1="9" y1="13" x2="15" y2="13"></line>
-                                                    <line x1="9" y1="17" x2="11" y2="17"></line>
+                                            {/* PhonePe */}
+                                            <div className="infy-upi-app-pill">
+                                                <div style={{ width: '15px', height: '15px', borderRadius: '50%', background: '#5F259F', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: '900' }}>
+                                                    पे
+                                                </div>
+                                                <span>PhonePe</span>
+                                            </div>
+
+                                            {/* Paytm */}
+                                            <div className="infy-upi-app-pill">
+                                                <span style={{ fontSize: '11px', fontWeight: '900' }}>
+                                                    <span style={{ color: '#002970' }}>pay</span><span style={{ color: '#00BAF2' }}>tm</span>
+                                                </span>
+                                            </div>
+
+                                            {/* BHIM */}
+                                            <div className="infy-upi-app-pill">
+                                                <svg width="12" height="12" viewBox="0 0 24 24">
+                                                    <polygon points="12 2 22 20 2 20" fill="#00833F" />
+                                                    <polygon points="12 6 18 18 6 18" fill="#E86127" />
                                                 </svg>
+                                                <span style={{ color: '#00833F', fontWeight: '800' }}>BHIM</span>
                                             </div>
-                                            <div className="infy-pay-method-item-text">
-                                                <div className="infy-pay-method-name">EMI</div>
-                                                <div className="infy-pay-method-sub">No Cost EMI available</div>
-                                            </div>
-                                            {systemModalMethod === 'emi' && <span className="infy-pay-method-arrow">&gt;</span>}
                                         </div>
                                     </div>
 
-                                    {/* Right Detail Pane */}
-                                    <div className="infy-pay-detail-pane">
-                                        {/* UPI VIEW */}
-                                        {systemModalMethod === 'upi' && (
-                                            <div>
-                                                <div className="infy-pay-detail-header">
-                                                    <h4>Pay using UPI</h4>
-                                                    <p>Scan the QR code or enter your UPI ID</p>
+                                    {/* Right Card: How to Pay? Box */}
+                                    <div className="infy-upi-how-to-box">
+                                        <div className="infy-upi-how-to-title">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                                                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                                            </svg>
+                                            <span>How to Pay?</span>
+                                        </div>
+
+                                        <div className="infy-upi-steps-list">
+                                            {[
+                                                'Open any UPI app (GPay, PhonePe, Paytm)',
+                                                'Scan the QR code',
+                                                'Verify the amount ₹588.82',
+                                                'Complete the payment',
+                                                'Enter the UTR/Transaction ID below',
+                                                'Click on "I\'ve Completed Payment"'
+                                            ].map((step, idx) => (
+                                                <div key={idx} className="infy-upi-step-row">
+                                                    <span className="infy-upi-step-circle">{idx + 1}</span>
+                                                    <span>{step}</span>
                                                 </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
 
-                                                {/* QR & Scan Card */}
-                                                <div className="infy-pay-qr-card">
-                                                    <div className="infy-pay-qr-code-wrapper">
-                                                        <svg width="102" height="102" viewBox="0 0 100 100" fill="none">
-                                                            <rect x="6" y="6" width="26" height="26" rx="3" stroke="#0F172A" strokeWidth="3" fill="none"/>
-                                                            <rect x="12" y="12" width="14" height="14" rx="2" fill="#0F172A"/>
-                                                            
-                                                            <rect x="68" y="6" width="26" height="26" rx="3" stroke="#0F172A" strokeWidth="3" fill="none"/>
-                                                            <rect x="74" y="12" width="14" height="14" rx="2" fill="#0F172A"/>
-                                                            
-                                                            <rect x="6" y="68" width="26" height="26" rx="3" stroke="#0F172A" strokeWidth="3" fill="none"/>
-                                                            <rect x="12" y="74" width="14" height="14" rx="2" fill="#0F172A"/>
+                                {/* Form: Transaction ID / UTR */}
+                                <form onSubmit={handleCompletedPaymentSubmit}>
+                                    <div className="infy-upi-form-field">
+                                        <label className="infy-upi-input-label">
+                                            Transaction ID / UTR <span className="required-star">*</span>
+                                        </label>
+                                        <div className="infy-upi-input-box">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                                            </svg>
+                                            <input
+                                                type="text"
+                                                value={utrInput}
+                                                onChange={(e) => setUtrInput(e.target.value)}
+                                                placeholder="Enter UTR / Transaction ID (e.g. 123456789012)"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
 
-                                                            <rect x="38" y="8" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="46" y="8" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="54" y="8" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="38" y="16" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="50" y="16" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="42" y="24" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="58" y="24" width="4" height="4" rx="1" fill="#0F172A"/>
-
-                                                            <rect x="8" y="38" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="16" y="42" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="24" y="38" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="8" y="50" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="20" y="54" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="24" y="46" width="4" height="4" rx="1" fill="#0F172A"/>
-
-                                                            <rect x="72" y="38" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="84" y="42" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="80" y="50" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="88" y="54" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="74" y="60" width="4" height="4" rx="1" fill="#0F172A"/>
-
-                                                            <rect x="38" y="72" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="46" y="76" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="54" y="72" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="42" y="84" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="50" y="88" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="62" y="82" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="70" y="76" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="82" y="80" width="4" height="4" rx="1" fill="#0F172A"/>
-                                                            <rect x="88" y="88" width="4" height="4" rx="1" fill="#0F172A"/>
-
-                                                            <rect x="36" y="36" width="28" height="28" rx="8" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="1.5"/>
-                                                            <path d="M52 42L47 56H50L55 42H52Z" fill="#00833F"/>
-                                                            <path d="M48 42L43 56H46L51 42H48Z" fill="#E86127"/>
-                                                        </svg>
-                                                    </div>
-
-                                                    <div className="infy-pay-scan-info">
-                                                        <div className="infy-pay-scan-title">Scan & Pay</div>
-                                                        <div className="infy-pay-scan-desc">
-                                                            Use any UPI app like PhonePe, Google Pay, Paytm, or your bank app.
-                                                        </div>
-                                                        <div className="infy-pay-apps-row">
-                                                            <div className="infy-pay-app-pill" style={{ background: '#5f259f', color: '#fff', border: 'none', width: '24px', height: '24px', borderRadius: '50%', padding: 0 }}>
-                                                                <span style={{ fontSize: '12px', fontWeight: 'bold' }}>पे</span>
-                                                            </div>
-                                                            <div className="infy-pay-app-pill" style={{ padding: '0 5px', gap: '3px' }}>
-                                                                <span style={{ color: '#4285F4', fontWeight: 'bold' }}>G</span>
-                                                                <span style={{ color: '#EA4335', fontWeight: 'bold' }}>P</span>
-                                                                <span style={{ color: '#FBBC05', fontWeight: 'bold' }}>a</span>
-                                                                <span style={{ color: '#34A853', fontWeight: 'bold' }}>y</span>
-                                                            </div>
-                                                            <div className="infy-pay-app-pill" style={{ padding: '0 6px' }}>
-                                                                <span style={{ color: '#002970', fontWeight: '900', fontSize: '9px' }}>pay</span>
-                                                                <span style={{ color: '#00b9f5', fontWeight: '900', fontSize: '9px' }}>tm</span>
-                                                            </div>
-                                                            <div className="infy-pay-app-pill" style={{ padding: '0 5px', gap: '3px' }}>
-                                                                <span style={{ color: '#00833F', fontWeight: '900', fontSize: '9px' }}>BHIM</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="infy-pay-divider">
-                                                    <span>OR</span>
-                                                </div>
-
-                                                {/* Enter UPI ID */}
-                                                <div>
-                                                    <label className="infy-pay-input-label">Enter UPI ID</label>
-                                                    <div className="infy-pay-input-box">
-                                                        <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
-                                                            <path d="M18.8 6L11 26h5.2l7.8-20h-5.2z" fill="#00833F"/>
-                                                            <path d="M12.8 6L5 26h5.2l7.8-20h-5.2z" fill="#E86127"/>
-                                                        </svg>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="name@upi"
-                                                            value={upiIdInput}
-                                                            onChange={(e) => setUpiIdInput(e.target.value)}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Pay Button */}
-                                                <button
-                                                    type="button"
-                                                    className="infy-pay-submit-btn"
-                                                    disabled={processingSystemPayment}
-                                                    onClick={() => handleConfirmSystemPayment('UPI')}
-                                                >
-                                                    {processingSystemPayment ? (
-                                                        <>
-                                                            <FontAwesomeIcon icon={faRotate} spin />
-                                                            <span>Processing Payment...</span>
-                                                        </>
-                                                    ) : (
-                                                        <span>Pay ₹588.82 &nbsp;→</span>
-                                                    )}
-                                                </button>
+                                    {/* Form: Upload Payment Screenshot (Optional) */}
+                                    <div className="infy-upi-upload-box">
+                                        <div className="infy-upi-upload-left">
+                                            <div className="infy-upi-upload-icon-box">
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                                </svg>
                                             </div>
-                                        )}
-
-                                        {/* CARDS VIEW */}
-                                        {systemModalMethod === 'cards' && (
                                             <div>
-                                                <div className="infy-pay-detail-header">
-                                                    <h4>Pay using Card</h4>
-                                                    <p>Debit or Credit Card (Visa, MasterCard, RuPay)</p>
+                                                <div className="infy-upi-upload-title">
+                                                    {screenshotFileName ? screenshotFileName : 'Upload Payment Screenshot (Optional)'}
                                                 </div>
-
-                                                <div style={{ marginBottom: '10px' }}>
-                                                    <label className="infy-pay-input-label">Card Number</label>
-                                                    <div className="infy-pay-input-box">
-                                                        <FontAwesomeIcon icon={faCreditCard} style={{ color: '#64748B' }} />
-                                                        <input
-                                                            type="text"
-                                                            placeholder="4321 •••• •••• 9821"
-                                                            value={cardDetails.number}
-                                                            onChange={(e) => setCardDetails({ ...cardDetails, number: e.target.value })}
-                                                        />
-                                                        <span style={{ fontSize: '10px', fontWeight: '800', color: '#1E40AF', background: '#DBEAFE', padding: '2px 6px', borderRadius: '4px' }}>VISA</span>
-                                                    </div>
+                                                <div className="infy-upi-upload-sub">
+                                                    Supported formats: JPG, PNG (Max 5MB)
                                                 </div>
-
-                                                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                                                    <div style={{ flex: 1 }}>
-                                                        <label className="infy-pay-input-label">Expiry (MM/YY)</label>
-                                                        <div className="infy-pay-input-box">
-                                                            <input
-                                                                type="text"
-                                                                placeholder="12/28"
-                                                                value={cardDetails.expiry}
-                                                                onChange={(e) => setCardDetails({ ...cardDetails, expiry: e.target.value })}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div style={{ flex: 1 }}>
-                                                        <label className="infy-pay-input-label">CVV</label>
-                                                        <div className="infy-pay-input-box">
-                                                            <input
-                                                                type="password"
-                                                                maxLength="4"
-                                                                placeholder="•••"
-                                                                value={cardDetails.cvv}
-                                                                onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value })}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div style={{ marginBottom: '14px' }}>
-                                                    <label className="infy-pay-input-label">Cardholder Name</label>
-                                                    <div className="infy-pay-input-box">
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Enter Name as on Card"
-                                                            value={cardDetails.name}
-                                                            onChange={(e) => setCardDetails({ ...cardDetails, name: e.target.value })}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <button
-                                                    type="button"
-                                                    className="infy-pay-submit-btn"
-                                                    disabled={processingSystemPayment}
-                                                    onClick={() => handleConfirmSystemPayment('CARDS')}
-                                                >
-                                                    {processingSystemPayment ? (
-                                                        <>
-                                                            <FontAwesomeIcon icon={faRotate} spin />
-                                                            <span>Processing Card...</span>
-                                                        </>
-                                                    ) : (
-                                                        <span>Pay ₹588.82 &nbsp;→</span>
-                                                    )}
-                                                </button>
                                             </div>
-                                        )}
+                                        </div>
 
-                                        {/* NET BANKING VIEW */}
-                                        {systemModalMethod === 'netbanking' && (
-                                            <div>
-                                                <div className="infy-pay-detail-header">
-                                                    <h4>Pay via Net Banking</h4>
-                                                    <p>Select your bank to continue</p>
-                                                </div>
+                                        <input
+                                            type="file"
+                                            ref={upiFileInputRef}
+                                            style={{ display: 'none' }}
+                                            accept="image/png,image/jpeg,image/jpg,image/webp"
+                                            onChange={(e) => {
+                                                if (e.target.files && e.target.files[0]) {
+                                                    const file = e.target.files[0];
+                                                    setScreenshotFile(file);
+                                                    setScreenshotFileName(file.name);
+                                                }
+                                            }}
+                                        />
 
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '14px' }}>
-                                                    {[
-                                                        { id: 'sbi', name: 'SBI' },
-                                                        { id: 'hdfc', name: 'HDFC' },
-                                                        { id: 'icici', name: 'ICICI' },
-                                                        { id: 'axis', name: 'AXIS' },
-                                                        { id: 'kotak', name: 'KOTAK' },
-                                                        { id: 'pnb', name: 'PNB' }
-                                                    ].map((bank) => (
-                                                        <button
-                                                            key={bank.id}
-                                                            type="button"
-                                                            onClick={() => setSelectedBank(bank.id)}
-                                                            style={{
-                                                                border: selectedBank === bank.id ? '1.5px solid #059669' : '1px solid #E2E8F0',
-                                                                background: selectedBank === bank.id ? '#ECFDF5' : '#FFFFFF',
-                                                                color: selectedBank === bank.id ? '#065F46' : '#1E293B',
-                                                                borderRadius: '8px',
-                                                                padding: '10px 6px',
-                                                                fontWeight: '700',
-                                                                fontSize: '12px',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            {bank.name}
-                                                        </button>
-                                                    ))}
-                                                </div>
+                                        <button
+                                            type="button"
+                                            className="infy-upi-upload-btn"
+                                            onClick={() => {
+                                                if (upiFileInputRef.current) {
+                                                    upiFileInputRef.current.click();
+                                                }
+                                            }}
+                                        >
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <line x1="12" y1="19" x2="12" y2="5"></line>
+                                                <polyline points="5 12 12 5 19 12"></polyline>
+                                            </svg>
+                                            <span>Choose File</span>
+                                        </button>
+                                    </div>
 
-                                                <div style={{ marginBottom: '16px' }}>
-                                                    <label className="infy-pay-input-label">Other Banks</label>
-                                                    <select
-                                                        style={{
-                                                            width: '100%',
-                                                            height: '42px',
-                                                            borderRadius: '8px',
-                                                            border: '1.5px solid #CBD5E1',
-                                                            padding: '0 10px',
-                                                            fontSize: '12px',
-                                                            fontWeight: '600',
-                                                            color: '#334155'
-                                                        }}
-                                                    >
-                                                        <option value="">Select from all other Indian banks...</option>
-                                                        <option value="bob">Bank of Baroda</option>
-                                                        <option value="canara">Canara Bank</option>
-                                                        <option value="union">Union Bank of India</option>
-                                                        <option value="indusind">IndusInd Bank</option>
-                                                        <option value="yes">Yes Bank</option>
-                                                    </select>
-                                                </div>
+                                    {/* Large CTA Button */}
+                                    <button
+                                        type="submit"
+                                        className="infy-upi-submit-btn"
+                                        disabled={!utrInput.trim() || submittingPayment}
+                                    >
+                                        <div className="infy-upi-check-badge">✓</div>
+                                        <span>{submittingPayment ? 'Submitting Payment...' : "I've Completed Payment"}</span>
+                                        <span style={{ fontSize: '16px', marginLeft: '4px' }}>→</span>
+                                    </button>
+                                </form>
 
-                                                <button
-                                                    type="button"
-                                                    className="infy-pay-submit-btn"
-                                                    disabled={processingSystemPayment}
-                                                    onClick={() => handleConfirmSystemPayment('NETBANKING')}
-                                                >
-                                                    {processingSystemPayment ? (
-                                                        <>
-                                                            <FontAwesomeIcon icon={faRotate} spin />
-                                                            <span>Connecting to Bank...</span>
-                                                        </>
-                                                    ) : (
-                                                        <span>Pay ₹588.82 &nbsp;→</span>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        )}
+                                {/* Info Note at Bottom */}
+                                <div className="infy-upi-info-note">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                    </svg>
+                                    <span>Your payment will be verified securely. You will be notified once your subscription is activated.</span>
+                                </div>
+                            </div>
+                        )}
 
-                                        {/* WALLET VIEW */}
-                                        {systemModalMethod === 'wallet' && (
-                                            <div>
-                                                <div className="infy-pay-detail-header">
-                                                    <h4>Pay using Wallet</h4>
-                                                    <p>Select your favorite wallet</p>
-                                                </div>
+                    </div>
+                </div>
+            )}
 
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                                                    {[
-                                                        { id: 'phonepe', name: 'PhonePe Wallet', sub: 'Instant debit via PhonePe' },
-                                                        { id: 'paytm', name: 'Paytm Wallet', sub: 'Paytm Payments Bank' },
-                                                        { id: 'amazon', name: 'Amazon Pay Balance', sub: 'One-click checkout' },
-                                                        { id: 'mobikwik', name: 'MobiKwik', sub: 'Wallet & Zip Pay Later' }
-                                                    ].map((wallet) => (
-                                                        <div
-                                                            key={wallet.id}
-                                                            onClick={() => setSelectedWallet(wallet.id)}
-                                                            style={{
-                                                                border: selectedWallet === wallet.id ? '1.5px solid #059669' : '1px solid #E2E8F0',
-                                                                background: selectedWallet === wallet.id ? '#ECFDF5' : '#FFFFFF',
-                                                                borderRadius: '10px',
-                                                                padding: '10px 14px',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'space-between',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            <div>
-                                                                <div style={{ fontWeight: '700', fontSize: '13px', color: '#0F172A' }}>{wallet.name}</div>
-                                                                <div style={{ fontSize: '11px', color: '#64748B' }}>{wallet.sub}</div>
-                                                            </div>
-                                                            <input
-                                                                type="radio"
-                                                                name="wallet"
-                                                                checked={selectedWallet === wallet.id}
-                                                                onChange={() => setSelectedWallet(wallet.id)}
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                <button
-                                                    type="button"
-                                                    className="infy-pay-submit-btn"
-                                                    disabled={processingSystemPayment}
-                                                    onClick={() => handleConfirmSystemPayment('WALLET')}
-                                                >
-                                                    {processingSystemPayment ? (
-                                                        <>
-                                                            <FontAwesomeIcon icon={faRotate} spin />
-                                                            <span>Connecting Wallet...</span>
-                                                        </>
-                                                    ) : (
-                                                        <span>Pay ₹588.82 &nbsp;→</span>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {/* EMI VIEW */}
-                                        {systemModalMethod === 'emi' && (
-                                            <div>
-                                                <div className="infy-pay-detail-header">
-                                                    <h4>EMI / Instant Approval</h4>
-                                                    <p>Select flexible EMI or direct enterprise clearance</p>
-                                                </div>
-
-                                                <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '14px', background: '#F8FAFC', marginBottom: '16px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                                        <span style={{ background: '#ECFDF5', color: '#059669', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '4px' }}>
-                                                            0% INTEREST
-                                                        </span>
-                                                        <strong style={{ fontSize: '13px', color: '#0F172A' }}>3-Month No Cost EMI</strong>
-                                                    </div>
-                                                    <div style={{ fontSize: '12px', color: '#64748B', lineHeight: '1.4' }}>
-                                                        Pay ₹196.27 / month for 3 months with zero extra charges or processing fees.
-                                                    </div>
-                                                </div>
-
-                                                <div style={{ border: '1px solid #BFDBFE', borderRadius: '12px', padding: '14px', background: '#EFF6FF', marginBottom: '16px' }}>
-                                                    <strong style={{ fontSize: '13px', color: '#1E40AF', display: 'block', marginBottom: '4px' }}>
-                                                        Instant System License Approval
-                                                    </strong>
-                                                    <div style={{ fontSize: '11.5px', color: '#1E3A8A', lineHeight: '1.4' }}>
-                                                        Immediate internal clearance with automated RSA-2048 lease extension (+30 Days).
-                                                    </div>
-                                                </div>
-
-                                                <button
-                                                    type="button"
-                                                    className="infy-pay-submit-btn"
-                                                    disabled={processingSystemPayment}
-                                                    onClick={() => handleConfirmSystemPayment('EMI')}
-                                                >
-                                                    {processingSystemPayment ? (
-                                                        <>
-                                                            <FontAwesomeIcon icon={faRotate} spin />
-                                                            <span>Approving Transaction...</span>
-                                                        </>
-                                                    ) : (
-                                                        <span>Confirm & Extend (+30 Days) &nbsp;→</span>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        )}
+            {/* ── MODAL: CURRENT PLAN ALREADY ACTIVE (DUPLICATE PAYMENT PROTECTION) ── */}
+            {showActiveWarningModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(8px)',
+                    zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                }}>
+                    <div style={{
+                        background: '#FFFFFF', borderRadius: '24px', maxWidth: '480px', width: '100%',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                        overflow: 'hidden', animation: 'modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                        border: '1px solid #E2E8F0'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+                            color: '#FFFFFF', padding: '22px 26px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{
+                                    width: '40px', height: '40px', borderRadius: '12px',
+                                    background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981', fontSize: '18px'
+                                }}>
+                                    <FontAwesomeIcon icon={faShieldHalved} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#FFFFFF' }}>
+                                        Current Plan Already Active
+                                    </h3>
+                                    <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px', fontWeight: '500' }}>
+                                        Duplicate Payment Protection
                                     </div>
                                 </div>
                             </div>
+                            <button
+                                onClick={() => setShowActiveWarningModal(false)}
+                                style={{
+                                    background: 'rgba(255,255,255,0.1)', border: 'none', color: '#CBD5E1',
+                                    width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
 
-                            {/* Trust Footer */}
-                            <div className="infy-pay-trust-footer">
-                                <div className="infy-pay-seals-row">
-                                    <div className="infy-pay-seal">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                                        </svg>
-                                        <span>PCI DSS Compliant</span>
-                                    </div>
-                                    <div className="infy-pay-seal">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                                            <path d="M9 12l2 2 4-4"/>
-                                        </svg>
-                                        <span>Razorpay Trusted by 5M+ Businesses</span>
-                                    </div>
-                                    <div className="infy-pay-seal">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                                        </svg>
-                                        <span>256-bit SSL Encryption</span>
+                        {/* Body */}
+                        <div style={{ padding: '24px 26px' }}>
+                            <div style={{
+                                background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '14px',
+                                padding: '16px', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '12px'
+                            }}>
+                                <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#059669', fontSize: '20px', marginTop: '2px' }} />
+                                <div style={{ fontSize: '13.5px', color: '#065F46', lineHeight: '1.5' }}>
+                                    <strong>Your subscription is active and in good standing.</strong> You do not need to make another payment at this time.
+                                </div>
+                            </div>
+
+                            {/* Plan details table */}
+                            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '16px', marginBottom: '20px', fontSize: '13px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid #E2E8F0' }}>
+                                    <span style={{ color: '#64748B', fontWeight: '600' }}>Active Plan</span>
+                                    <strong style={{ color: '#0F172A' }}>{activePlanInfo?.plan_name || resolvedPlanTitle}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #E2E8F0' }}>
+                                    <span style={{ color: '#64748B', fontWeight: '600' }}>Status</span>
+                                    <span style={{
+                                        background: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0',
+                                        padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700',
+                                        display: 'inline-flex', alignItems: 'center', gap: '5px'
+                                    }}>
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }}></span>
+                                        Active
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #E2E8F0' }}>
+                                    <span style={{ color: '#64748B', fontWeight: '600' }}>Valid Until</span>
+                                    <strong style={{ color: '#0F172A' }}>{activePlanInfo?.ends_at || subData.subscription_ends_at || 'Active'}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px' }}>
+                                    <span style={{ color: '#64748B', fontWeight: '600' }}>Remaining Period</span>
+                                    <strong style={{ color: '#059669', fontWeight: '700' }}>
+                                        {activePlanInfo?.days_remaining ?? daysLeft} Days Remaining
+                                    </strong>
+                                </div>
+                            </div>
+
+                            <div style={{ fontSize: '12px', color: '#64748B', lineHeight: '1.6', marginBottom: '22px' }}>
+                                <FontAwesomeIcon icon={faLock} style={{ color: '#94A3B8', marginRight: '6px' }} />
+                                To prevent accidental double charges, plan renewal unlocks automatically when <strong>6 or fewer days</strong> remain on your current subscription.
+                            </div>
+
+                            {/* Buttons */}
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowActiveWarningModal(false)}
+                                    style={{
+                                        flex: 1, background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                                        color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '12px 18px',
+                                        fontSize: '13.5px', fontWeight: '700', cursor: 'pointer',
+                                        boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)'
+                                    }}
+                                >
+                                    I Understand
+                                </button>
+                                <a
+                                    href="/billing/invoice/1"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                        background: '#F1F5F9', color: '#334155', border: '1px solid #CBD5E1',
+                                        borderRadius: '10px', padding: '12px 16px', fontSize: '13px', fontWeight: '600',
+                                        textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px'
+                                    }}
+                                >
+                                    <FontAwesomeIcon icon={faDownload} />
+                                    <span>Invoice</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL: PAYMENT ALREADY PENDING (REUSE OR CANCEL) ── */}
+            {showPendingModal && pendingPaymentInfo && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(8px)',
+                    zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                }}>
+                    <div style={{
+                        background: '#FFFFFF', borderRadius: '24px', maxWidth: '480px', width: '100%',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                        overflow: 'hidden', animation: 'modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                        border: '1px solid #E2E8F0'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+                            color: '#FFFFFF', padding: '22px 26px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{
+                                    width: '40px', height: '40px', borderRadius: '12px',
+                                    background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F59E0B', fontSize: '18px'
+                                }}>
+                                    <FontAwesomeIcon icon={faClock} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#FFFFFF' }}>
+                                        Payment Already Pending
+                                    </h3>
+                                    <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px', fontWeight: '500' }}>
+                                        Incomplete Transaction Detected
                                     </div>
                                 </div>
+                            </div>
+                            <button
+                                onClick={() => setShowPendingModal(false)}
+                                style={{
+                                    background: 'rgba(255,255,255,0.1)', border: 'none', color: '#CBD5E1',
+                                    width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
 
-                                <div className="infy-pay-powered-by">
-                                    <span>Powered by</span>
-                                    <span className="infy-pay-powered-logo">
-                                        <svg width="12" height="14" viewBox="0 0 24 28" fill="none">
-                                            <path d="M14.5 1.5L4 16.5H12L9.5 26.5L20 11.5H12L14.5 1.5Z" fill="#0284C7"/>
-                                        </svg>
-                                        <span style={{ fontStyle: 'italic', fontWeight: '900' }}>Razorpay</span>
+                        {/* Body */}
+                        <div style={{ padding: '24px 26px' }}>
+                            <div style={{
+                                background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '14px',
+                                padding: '16px', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '12px'
+                            }}>
+                                <FontAwesomeIcon icon={faTriangleExclamation} style={{ color: '#D97706', fontSize: '18px', marginTop: '2px' }} />
+                                <div style={{ fontSize: '13px', color: '#92400E', lineHeight: '1.5' }}>
+                                    You have an active payment attempt in progress. Only <strong>one pending attempt</strong> is permitted at a time to prevent duplicate billing.
+                                </div>
+                            </div>
+
+                            {/* Details table */}
+                            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '16px', marginBottom: '20px', fontSize: '13px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid #E2E8F0' }}>
+                                    <span style={{ color: '#64748B', fontWeight: '600' }}>Invoice</span>
+                                    <strong style={{ color: '#0F172A', fontFamily: 'monospace' }}>{pendingPaymentInfo.invoice_number}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #E2E8F0' }}>
+                                    <span style={{ color: '#64748B', fontWeight: '600' }}>Amount</span>
+                                    <strong style={{ color: '#0F172A' }}>₹{pendingPaymentInfo.amount}.00</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #E2E8F0' }}>
+                                    <span style={{ color: '#64748B', fontWeight: '600' }}>Status</span>
+                                    <span style={{
+                                        background: '#FEF3C7', color: '#D97706', border: '1px solid #FDE68A',
+                                        padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700',
+                                        display: 'inline-flex', alignItems: 'center', gap: '5px'
+                                    }}>
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B' }}></span>
+                                        Pending
                                     </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px' }}>
+                                    <span style={{ color: '#64748B', fontWeight: '600' }}>Initiated On</span>
+                                    <span style={{ color: '#475569', fontWeight: '600' }}>{pendingPaymentInfo.paid_on || 'Today'}</span>
+                                </div>
+                            </div>
+
+                            <p style={{ fontSize: '12.5px', color: '#64748B', lineHeight: '1.5', marginBottom: '22px' }}>
+                                You can continue this existing payment attempt now, or cancel it if you wish to start a new transaction.
+                            </p>
+
+                            {/* Buttons */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => handleResumePendingPayment(pendingPaymentInfo)}
+                                    style={{
+                                        width: '100%', background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                                        color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '12px 18px',
+                                        fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+                                        boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                    }}
+                                >
+                                    <FontAwesomeIcon icon={faRotate} />
+                                    <span>Continue This Payment</span>
+                                </button>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCancelPendingPayment(pendingPaymentInfo)}
+                                        disabled={cancellingPending}
+                                        style={{
+                                            flex: 1, background: '#FEF2F2', border: '1.5px solid #FECACA',
+                                            color: '#DC2626', borderRadius: '10px', padding: '10px 14px',
+                                            fontSize: '12.5px', fontWeight: '700', cursor: cancellingPending ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        {cancellingPending ? 'Cancelling...' : 'Cancel This Attempt'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPendingModal(false)}
+                                        style={{
+                                            flex: 1, background: '#F1F5F9', border: '1px solid #CBD5E1',
+                                            color: '#475569', borderRadius: '10px', padding: '10px 14px',
+                                            fontSize: '12.5px', fontWeight: '600', cursor: 'pointer'
+                                        }}
+                                    >
+                                        Close
+                                    </button>
                                 </div>
                             </div>
                         </div>
-
                     </div>
                 </div>
             )}

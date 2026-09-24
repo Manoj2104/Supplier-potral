@@ -93,9 +93,17 @@ const SuperAdminPaymentSystems = () => {
     const [sysForm, setSysForm] = useState({
         system_payment_mode: 'system',
         system_payment_verification: 'automatic',
+        system_upi_id: 'infypos@upi',
         currency: 'INR',
     });
     const [savingSys, setSavingSys] = useState(false);
+
+    // Pending UPI Payments State
+    const [pendingPayments, setPendingPayments] = useState([]);
+    const [loadingPending, setLoadingPending] = useState(false);
+    const [verifyingId, setVerifyingId] = useState(null);
+    const [rejectModal, setRejectModal] = useState({ open: false, payment: null, reason: '', rejecting: false });
+    const [screenshotModal, setScreenshotModal] = useState({ open: false, url: '' });
 
     // Payment Logs State
     const [logs, setLogs] = useState([]);
@@ -129,6 +137,7 @@ const SuperAdminPaymentSystems = () => {
                 setSysForm({
                     system_payment_mode: d.system_payment_mode || 'system',
                     system_payment_verification: d.system_payment_verification || 'automatic',
+                    system_upi_id: d.system_upi_id || 'infypos@upi',
                     currency: d.currency || 'INR',
                 });
             }
@@ -137,6 +146,21 @@ const SuperAdminPaymentSystems = () => {
         } finally {
             setLoading(false);
             setRefreshing(false);
+        }
+    };
+
+    // Load Pending Verifications from Backend
+    const fetchPendingPayments = async () => {
+        setLoadingPending(true);
+        try {
+            const res = await axios.get('/api/saas-admin/payment-settings/pending-requests');
+            if (res.data && res.data.success) {
+                setPendingPayments(res.data.data || []);
+            }
+        } catch (err) {
+            console.warn('Failed to load pending payments:', err);
+        } finally {
+            setLoadingPending(false);
         }
     };
 
@@ -169,13 +193,63 @@ const SuperAdminPaymentSystems = () => {
     useEffect(() => {
         fetchSettings();
         fetchLogs();
+        fetchPendingPayments();
     }, []);
 
     useEffect(() => {
         if (subTab === 'logs') {
             fetchLogs();
+        } else if (subTab === 'pending') {
+            fetchPendingPayments();
         }
     }, [logsFilter, subTab]);
+
+    // Handle Super Admin Direct Verification of UPI Payment
+    const handleVerifyPayment = async (payment) => {
+        if (!window.confirm(`Are you sure you want to verify payment for ${payment.customer_name} (UTR: ${payment.utr})?\n\nThis will immediately activate and extend the customer's subscription by +30 Days.`)) {
+            return;
+        }
+
+        setVerifyingId(payment.id);
+        try {
+            const res = await axios.post(`/api/saas-admin/payment-settings/verify-request/${payment.id}`);
+            if (res.data && res.data.success) {
+                showToast(`✓ Payment verified! Subscription extended to ${res.data.valid_until || 'next billing cycle'}`);
+                fetchPendingPayments();
+                fetchLogs();
+                fetchSettings();
+            } else {
+                showToast(res.data?.message || 'Verification failed', 'error');
+            }
+        } catch (err) {
+            showToast(err.response?.data?.message || 'Failed to verify payment', 'error');
+        } finally {
+            setVerifyingId(null);
+        }
+    };
+
+    // Handle Super Admin Rejection of UPI Payment
+    const handleRejectPayment = async () => {
+        if (!rejectModal.payment) return;
+        setRejectModal(prev => ({ ...prev, rejecting: true }));
+        try {
+            const res = await axios.post(`/api/saas-admin/payment-settings/reject-request/${rejectModal.payment.id}`, {
+                reason: rejectModal.reason || 'Invalid UTR or payment not received.'
+            });
+            if (res.data && res.data.success) {
+                showToast('Payment request rejected.');
+                setRejectModal({ open: false, payment: null, reason: '', rejecting: false });
+                fetchPendingPayments();
+                fetchLogs();
+            } else {
+                showToast(res.data?.message || 'Rejection failed', 'error');
+                setRejectModal(prev => ({ ...prev, rejecting: false }));
+            }
+        } catch (err) {
+            showToast(err.response?.data?.message || 'Failed to reject payment', 'error');
+            setRejectModal(prev => ({ ...prev, rejecting: false }));
+        }
+    };
 
     // Handle Provider Switch Prompt
     const promptSwitchProvider = (targetProvider) => {
@@ -554,6 +628,7 @@ const SuperAdminPaymentSystems = () => {
                     { id: 'overview', label: 'Payment Providers', icon: faSliders },
                     { id: 'razorpay', label: 'Razorpay Configuration', icon: faCreditCard },
                     { id: 'system', label: 'System Payment', icon: faWallet },
+                    { id: 'pending', label: 'Pending Verifications', icon: faShieldAlt, count: pendingPayments.length },
                     { id: 'logs', label: 'Payment Logs', icon: faReceipt },
                 ].map(tab => (
                     <button
@@ -577,6 +652,19 @@ const SuperAdminPaymentSystems = () => {
                     >
                         <FontAwesomeIcon icon={tab.icon} />
                         {tab.label}
+                        {tab.count !== undefined && tab.count > 0 && (
+                            <span style={{
+                                background: '#EF4444',
+                                color: '#FFFFFF',
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                padding: '1px 7px',
+                                borderRadius: '12px',
+                                marginLeft: '2px'
+                            }}>
+                                {tab.count}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -1362,6 +1450,32 @@ const SuperAdminPaymentSystems = () => {
                             </span>
                         </div>
 
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                                Merchant UPI ID (for Customer QR Code)
+                            </label>
+                            <input
+                                type="text"
+                                value={sysForm.system_upi_id || ''}
+                                onChange={(e) => setSysForm(prev => ({ ...prev, system_upi_id: e.target.value }))}
+                                placeholder="infypos@icici"
+                                style={{
+                                    width: '100%',
+                                    maxWidth: '320px',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '13.5px',
+                                    fontWeight: 600,
+                                    color: '#0F172A',
+                                    background: '#F8FAFC',
+                                }}
+                            />
+                            <span style={{ fontSize: '11.5px', color: '#64748B', display: 'block', marginTop: '4px' }}>
+                                This UPI ID is dynamically encoded into the customer-facing QR code for direct transfers.
+                            </span>
+                        </div>
+
                         <div style={{ marginBottom: '28px' }}>
                             <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
                                 Currency
@@ -1405,6 +1519,208 @@ const SuperAdminPaymentSystems = () => {
                             {savingSys ? 'Saving...' : 'Save System Payment Settings'}
                         </button>
                     </form>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {/* SUB-TAB: PENDING VERIFICATIONS                                   */}
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {subTab === 'pending' && (
+                <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '16px',
+                    padding: '24px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '20px',
+                        flexWrap: 'wrap',
+                        gap: '12px',
+                    }}>
+                        <div>
+                            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <FontAwesomeIcon icon={faShieldAlt} style={{ color: '#059669' }} />
+                                PENDING PAYMENT VERIFICATIONS
+                                {pendingPayments.length > 0 && (
+                                    <span style={{ background: '#FEF3C7', color: '#B45309', fontSize: '12px', fontWeight: 800, padding: '2px 10px', borderRadius: '12px' }}>
+                                        {pendingPayments.length} Pending
+                                    </span>
+                                )}
+                            </h3>
+                            <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>
+                                Review customer UPI submissions, check Transaction IDs / UTRs against your bank statement, and confirm activation.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={fetchPendingPayments}
+                            disabled={loadingPending}
+                            style={{
+                                background: '#F8FAFC',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '10px',
+                                padding: '8px 16px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                color: '#334155',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                            }}
+                        >
+                            <FontAwesomeIcon icon={faRotate} spin={loadingPending} />
+                            Refresh
+                        </button>
+                    </div>
+
+                    {/* Pending Requests Table */}
+                    <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                            <thead>
+                                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontWeight: 700 }}>
+                                    <th style={{ padding: '12px 16px' }}>CUSTOMER</th>
+                                    <th style={{ padding: '12px 16px' }}>PLAN &amp; AMOUNT</th>
+                                    <th style={{ padding: '12px 16px' }}>UTR / REF</th>
+                                    <th style={{ padding: '12px 16px' }}>SCREENSHOT</th>
+                                    <th style={{ padding: '12px 16px' }}>SUBMITTED AT</th>
+                                    <th style={{ padding: '12px 16px' }}>STATUS</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loadingPending ? (
+                                    <tr>
+                                        <td colSpan="7" style={{ textAlign: 'center', padding: '36px', color: '#64748B' }}>
+                                            <FontAwesomeIcon icon={faSpinner} spin style={{ fontSize: '20px', marginBottom: '8px' }} />
+                                            <div>Loading pending verifications...</div>
+                                        </td>
+                                    </tr>
+                                ) : pendingPayments.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="7" style={{ textAlign: 'center', padding: '48px', color: '#64748B' }}>
+                                            <div style={{ fontSize: '32px', marginBottom: '12px', color: '#10B981' }}>✓</div>
+                                            <div style={{ fontWeight: 700, fontSize: '15px', color: '#0F172A' }}>No Pending Verifications</div>
+                                            <div style={{ fontSize: '12.5px', marginTop: '4px', color: '#64748B' }}>All customer UPI payments have been reviewed and verified.</div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    pendingPayments.map(p => (
+                                        <tr key={p.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <div style={{ fontWeight: 700, color: '#0F172A' }}>{p.customer_name}</div>
+                                                <div style={{ fontSize: '11.5px', color: '#64748B' }}>{p.customer_email || p.customer_phone || 'sasti@gmail.com'}</div>
+                                            </td>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <div style={{ fontWeight: 700, color: '#059669' }}>{p.amount || '₹588.82'}</div>
+                                                <div style={{ fontSize: '11px', color: '#64748B' }}>{p.plan_name || 'INFY-POS PREMIUM'}</div>
+                                            </td>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0F172A' }}>
+                                                    {p.utr}
+                                                </div>
+                                                <div style={{ fontSize: '11px', color: '#94A3B8', fontFamily: 'monospace' }}>
+                                                    {p.payment_reference}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                {p.screenshot_url ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setScreenshotModal({ open: true, url: p.screenshot_url })}
+                                                        style={{
+                                                            background: '#EFF6FF',
+                                                            border: '1px solid #BFDBFE',
+                                                            borderRadius: '8px',
+                                                            padding: '4px 10px',
+                                                            fontSize: '11.5px',
+                                                            fontWeight: 600,
+                                                            color: '#2563EB',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                        }}
+                                                    >
+                                                        <FontAwesomeIcon icon={faEye} />
+                                                        View Proof
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ fontSize: '11.5px', color: '#94A3B8', fontStyle: 'italic' }}>
+                                                        No screenshot
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td style={{ padding: '12px 16px', fontSize: '12px', color: '#64748B' }}>
+                                                {p.submitted_at || 'Just now'}
+                                            </td>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <span style={{
+                                                    background: '#FEF3C7',
+                                                    color: '#B45309',
+                                                    fontSize: '11px',
+                                                    fontWeight: 800,
+                                                    padding: '3px 8px',
+                                                    borderRadius: '12px',
+                                                    display: 'inline-block',
+                                                }}>
+                                                    ● PENDING
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                                                <div style={{ display: 'inline-flex', gap: '8px' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleVerifyPayment(p)}
+                                                        disabled={verifyingId === p.id}
+                                                        style={{
+                                                            background: '#16A34A',
+                                                            border: 'none',
+                                                            borderRadius: '8px',
+                                                            padding: '6px 14px',
+                                                            color: '#FFFFFF',
+                                                            fontWeight: 700,
+                                                            fontSize: '12px',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            boxShadow: '0 2px 6px rgba(22, 163, 74, 0.25)',
+                                                        }}
+                                                    >
+                                                        <FontAwesomeIcon icon={verifyingId === p.id ? faSpinner : faCheck} spin={verifyingId === p.id} />
+                                                        {verifyingId === p.id ? 'Activating...' : 'Verify Payment'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRejectModal({ open: true, payment: p, reason: '', rejecting: false })}
+                                                        disabled={verifyingId === p.id}
+                                                        style={{
+                                                            background: '#FFFFFF',
+                                                            border: '1px solid #EF4444',
+                                                            borderRadius: '8px',
+                                                            padding: '6px 12px',
+                                                            color: '#EF4444',
+                                                            fontWeight: 700,
+                                                            fontSize: '12px',
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 
@@ -1809,6 +2125,162 @@ const SuperAdminPaymentSystems = () => {
                             >
                                 Continue to Live Mode
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {/* REJECTION REASON MODAL                                            */}
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {rejectModal.open && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.7)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 99999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '20px',
+                }}>
+                    <div style={{
+                        background: '#FFFFFF',
+                        borderRadius: '16px',
+                        maxWidth: '480px',
+                        width: '100%',
+                        padding: '24px',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                    }}>
+                        <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#DC2626', margin: '0 0 10px 0' }}>
+                            Reject Payment Submission
+                        </h3>
+                        <p style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+                            Rejecting payment for UTR: <strong>{rejectModal.payment?.utr}</strong>. Please enter the reason for rejection (e.g. UTR not found on statement, wrong amount, duplicate).
+                        </p>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                                Reason for Rejection
+                            </label>
+                            <textarea
+                                value={rejectModal.reason}
+                                onChange={(e) => setRejectModal(prev => ({ ...prev, reason: e.target.value }))}
+                                placeholder="Enter rejection reason..."
+                                rows="3"
+                                style={{
+                                    width: '100%',
+                                    borderRadius: '10px',
+                                    border: '1px solid #CBD5E1',
+                                    padding: '10px',
+                                    fontSize: '13px',
+                                    fontFamily: 'inherit',
+                                    outline: 'none',
+                                    resize: 'none',
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button
+                                type="button"
+                                onClick={() => setRejectModal({ open: false, payment: null, reason: '', rejecting: false })}
+                                disabled={rejectModal.rejecting}
+                                style={{
+                                    background: '#F1F5F9',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '8px 16px',
+                                    color: '#475569',
+                                    fontWeight: 700,
+                                    fontSize: '13px',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleRejectPayment}
+                                disabled={rejectModal.rejecting}
+                                style={{
+                                    background: '#DC2626',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '8px 18px',
+                                    color: '#FFFFFF',
+                                    fontWeight: 700,
+                                    fontSize: '13px',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                }}
+                            >
+                                {rejectModal.rejecting && <FontAwesomeIcon icon={faSpinner} spin />}
+                                Confirm Rejection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {/* SCREENSHOT PROOF PREVIEW MODAL                                    */}
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {screenshotModal.open && (
+                <div
+                    onClick={() => setScreenshotModal({ open: false, url: '' })}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        backdropFilter: 'blur(4px)',
+                        zIndex: 999999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '24px',
+                        cursor: 'zoom-out',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            maxWidth: '700px',
+                            maxHeight: '90vh',
+                            background: '#FFFFFF',
+                            borderRadius: '16px',
+                            overflow: 'hidden',
+                            boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            cursor: 'default',
+                        }}
+                    >
+                        <div style={{ padding: '14px 18px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 700, fontSize: '14px', color: '#0F172A' }}>Payment Proof Screenshot</span>
+                            <button
+                                type="button"
+                                onClick={() => setScreenshotModal({ open: false, url: '' })}
+                                style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#64748B' }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ padding: '16px', overflow: 'auto', textAlign: 'center', background: '#0F172A' }}>
+                            <img
+                                src={screenshotModal.url}
+                                alt="Payment Proof"
+                                style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', borderRadius: '8px' }}
+                            />
                         </div>
                     </div>
                 </div>
