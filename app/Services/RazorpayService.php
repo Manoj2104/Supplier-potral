@@ -90,6 +90,9 @@ class RazorpayService
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
+        curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+        curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 
         if (strtoupper($method) === 'POST') {
@@ -189,6 +192,17 @@ class RazorpayService
     public static function fetchPayment(string $paymentId): array
     {
         return self::apiRequest('payments/' . urlencode($paymentId), 'GET');
+    }
+
+    /**
+     * Authoritatively Capture an authorized Payment on Razorpay
+     */
+    public static function capturePayment(string $paymentId, int $amountPaise = 49900, string $currency = 'INR'): array
+    {
+        return self::apiRequest('payments/' . urlencode($paymentId) . '/capture', 'POST', [
+            'amount'   => $amountPaise,
+            'currency' => $currency,
+        ]);
     }
 
     /**

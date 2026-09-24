@@ -113,6 +113,12 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
     const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
     const [toastMsg, setToastMsg] = useState(null);
 
+    // Payment History Pagination & Retry States
+    const [historyPage, setHistoryPage] = useState(1);
+    const [viewAllHistory, setViewAllHistory] = useState(false);
+    const [retryingSubId, setRetryingSubId] = useState(null);
+    const HISTORY_PAGE_SIZE = 10;
+
     // Real-time Restore Backup States
     const [isRestoring, setIsRestoring] = useState(false);
     const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -392,9 +398,29 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
 
     // Strict status checks with bulletproof normalization
     const rawStatus = String(currentSub.status || '').toLowerCase().trim();
-    const isServerValid = Boolean(currentSub.valid) || rawStatus === 'active' || Boolean(currentSub.is_active);
-    const isTrial   = !isServerValid && (rawStatus === 'trial' || Boolean(currentSub.is_trial));
-    const isExpired = !isServerValid && (rawStatus === 'expired' || Boolean(currentSub.is_expired) || rawStatus === 'locked' || rawStatus === 'revoked' || (isTrial && daysLeft <= 0));
+
+    const isZeroCountdown = countdown.days === 0 && countdown.hours === 0 && countdown.minutes === 0 && countdown.seconds === 0;
+
+    // Check if subscription end / next billing date has passed
+    const rawEndVal = currentSub.subscription_ends_at || currentSub.next_billing_date || currentSub.trial_ends_at || currentSub.valid_until || currentSub.expires_at;
+    let isPastEndDate = false;
+    if (rawEndVal && rawEndVal !== 'Never' && rawEndVal !== 'N/A' && rawEndVal !== 'Expired') {
+        const parsedTime = new Date(rawEndVal).getTime();
+        if (!isNaN(parsedTime) && parsedTime > 0) {
+            isPastEndDate = parsedTime <= Date.now();
+        }
+    }
+
+    const hasZeroRemaining = (typeof currentSub.remaining_seconds === 'number' && currentSub.remaining_seconds <= 0) ||
+                             (typeof currentSub.days_remaining === 'number' && currentSub.days_remaining <= 0);
+
+    const isExplicitExpired = rawStatus === 'expired' || rawStatus === 'locked' || rawStatus === 'revoked' || rawStatus === 'access_locked' || Boolean(currentSub.is_expired);
+    const isTimeExpired = isZeroCountdown && (isPastEndDate || hasZeroRemaining || isExplicitExpired || currentSub.valid === false);
+    const isTrialExpired = (rawStatus === 'trial' || Boolean(currentSub.is_trial)) && (daysLeft <= 0 || isZeroCountdown);
+
+    const isExpired = Boolean(isExplicitExpired || isTimeExpired || isTrialExpired);
+    const isServerValid = !isExpired && (Boolean(currentSub.valid) || rawStatus === 'active' || Boolean(currentSub.is_active));
+    const isTrial   = !isExpired && (rawStatus === 'trial' || Boolean(currentSub.is_trial));
     const isActive  = !isExpired && !isTrial && (rawStatus === 'active' || isServerValid);
     const isGrace   = !isExpired && (rawStatus === 'grace_period' || Boolean(currentSub.is_grace));
     // Block payment ONLY when subscription is active, not trial, AND more than 6 days remain
@@ -538,24 +564,80 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         setTimeout(() => setToastMsg(null), 4000);
     };
 
-    // Direct Razorpay Checkout on button click (No intermediate modal, opens immediately)
-    const handleOpenCheckout = async (e) => {
+    // ⚡ 0ms INSTANT CHECKOUT — Opens official Razorpay modal immediately on click without network delay
+    const handleOpenCheckout = (e) => {
         if (e) e.preventDefault();
-        if (processing) return;
-        await handleExecutePayment();
+
+        const keyId = subData?.razorpay_key_id || 'rzp_test_TfUvXTbtZxl0LL';
+
+        if (typeof window.Razorpay !== 'function') {
+            alert('Razorpay Checkout SDK is loading. Please check your internet connection and try again.');
+            return;
+        }
+
+        const options = {
+            key: keyId,
+            amount: 49900, // ₹499 in paise
+            currency: 'INR',
+            name: 'INFY-POS Enterprise',
+            description: 'INFY-POS PREMIUM (+30 Days Extension)',
+            image: '/images/pos_subscription_hero.png',
+            prefill: {
+                name: subData?.owner_name || 'Sasti',
+                email: 'sasti@gmail.com',
+                contact: '7848596959',
+            },
+            theme: { color: '#059669' },
+            modal: {
+                ondismiss: function () {
+                    // Modal dismissed by user
+                }
+            },
+            handler: async function (response) {
+                showToast('Verifying payment with server...');
+                try {
+                    const verifyRes = await axios.post('/api/billing/razorpay/verify', {
+                        razorpay_payment_id: response.razorpay_payment_id,
+                        payment_method: 'Razorpay / UPI / Cards',
+                    });
+
+                    if (verifyRes.data && verifyRes.data.success) {
+                        showToast(verifyRes.data.message || 'Payment verified! Subscription extended (+30 Days).');
+                        localStorage.removeItem('sub_banner_dismissed_until');
+                        await fetchSubscriptionStatus();
+                    } else {
+                        alert('Verification Failed: ' + (verifyRes.data?.message || 'Transaction could not be verified.'));
+                    }
+                } catch (err) {
+                    alert('Server verification failed: ' + (err.response?.data?.message || err.message));
+                }
+            }
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (resp) {
+            alert('Payment Failed: ' + (resp.error?.description || 'Transaction was declined'));
+        });
+        rzp.open();
     };
 
-    // Execute Official Razorpay Checkout directly
-    const handleExecutePayment = async () => {
-        setProcessing(true);
+    // Execute Retry for a specific pending payment in the history table
+    const handleRetryPayment = async (sub) => {
+        if (!sub) return;
+        const targetId = sub.id || sub.invoice_number;
+        setRetryingSubId(targetId);
         try {
             await ensureRazorpayLoaded();
 
-            // 1. Call Backend to create authoritative order (<500ms)
-            const initRes = await axios.post('/api/billing/razorpay/subscription');
+            // 1. Call Backend to initialize / resume checkout for this specific pending invoice
+            const initRes = await axios.post('/api/billing/razorpay/subscription', {
+                sub_id: sub.id,
+                invoice_number: sub.invoice_number
+            });
+
             if (!initRes.data || !initRes.data.success) {
                 alert('Could not initialize Razorpay checkout. ' + (initRes.data?.message || 'Please try again.'));
-                setProcessing(false);
+                setRetryingSubId(null);
                 return;
             }
 
@@ -569,28 +651,29 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                 amount: payData.amount || 49900,
                 currency: payData.currency || 'INR',
                 name: 'INFY-POS Enterprise',
-                description: 'INFY-POS PREMIUM (+30 Days Extension)',
+                description: `Retry Payment: ${sub.invoice_number || 'INFY-POS PREMIUM'}`,
                 prefill: payData.prefill || {},
                 theme: { color: '#059669' },
                 modal: {
                     ondismiss: function () {
-                        setProcessing(false);
+                        setRetryingSubId(null);
                     }
                 },
                 handler: async function (response) {
-                    setProcessing(true);
+                    setRetryingSubId(targetId);
                     try {
-                        // 3. Send payment tokens to backend for cryptographic signature verification
                         const verifyRes = await axios.post('/api/billing/razorpay/verify', {
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_subscription_id: response.razorpay_subscription_id || payData.subscription_id,
                             razorpay_order_id: response.razorpay_order_id || payData.order_id,
                             razorpay_signature: response.razorpay_signature,
                             payment_method: 'Razorpay / UPI / Cards',
+                            sub_id: sub.id,
+                            invoice_number: sub.invoice_number
                         });
 
                         if (verifyRes.data && verifyRes.data.success) {
-                            showToast(verifyRes.data.message || 'Payment verified! Subscription extended (+30 Days).');
+                            showToast(verifyRes.data.message || `Payment verified for ${sub.invoice_number}! Subscription renewed.`);
                             localStorage.removeItem('sub_banner_dismissed_until');
                             await fetchSubscriptionStatus();
                         } else {
@@ -599,7 +682,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                     } catch (err) {
                         alert('Server verification failed: ' + (err.response?.data?.message || err.message));
                     } finally {
-                        setProcessing(false);
+                        setRetryingSubId(null);
                     }
                 }
             };
@@ -608,18 +691,17 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                 const rzp = new window.Razorpay(options);
                 rzp.on('payment.failed', function (resp) {
                     alert('Payment Failed: ' + (resp.error?.description || 'Transaction was declined'));
-                    setProcessing(false);
+                    setRetryingSubId(null);
                 });
                 rzp.open();
-                // When modal opens, clear button loading
-                setProcessing(false);
+                setRetryingSubId(null);
             } else {
-                alert('Razorpay Checkout SDK is loading. Please try again in 1 second.');
-                setProcessing(false);
+                alert('Razorpay Checkout SDK is loading. Please try again.');
+                setRetryingSubId(null);
             }
         } catch (err) {
-            alert('Payment initialization error: ' + (err.response?.data?.message || err.message));
-            setProcessing(false);
+            alert('Retry initialization error: ' + (err.response?.data?.message || err.message));
+            setRetryingSubId(null);
         }
     };
 
@@ -854,6 +936,46 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                 </div>
             )}
 
+            {/* ── SUBSCRIPTION EXPIRED ALERT BANNER ── */}
+            {isExpired && (
+                <div style={{
+                    background: '#FEF2F2',
+                    border: '1.5px solid #FECACA',
+                    color: '#991B1B',
+                    padding: '14px 20px',
+                    borderRadius: '12px',
+                    marginBottom: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 2px 10px rgba(220, 38, 38, 0.08)',
+                    fontSize: '14px',
+                    fontWeight: '700'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <FontAwesomeIcon icon={faTriangleExclamation} style={{ fontSize: '18px', color: '#DC2626' }} />
+                        <span>🚨 Your subscription has expired. Please renew your plan to restore full POS access.</span>
+                    </div>
+                    <button
+                        onClick={handleOpenCheckout}
+                        disabled={processing}
+                        style={{
+                            background: '#DC2626',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            padding: '8px 18px',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        {processing ? 'Connecting...' : '🔄 Renew Now'}
+                    </button>
+                </div>
+            )}
+
             {/* ── EXPIRY WARNING SYSTEM (7 DAYS, 72H, 24H, 6H, 1H, 10M) ── */}
             {!isExpired && (() => {
                 const rawSeconds = (countdown.days * 86400) + (countdown.hours * 3600) + (countdown.minutes * 60) + countdown.seconds;
@@ -952,9 +1074,9 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                     </h3>
                     <p>{isTrial ? '₹0 Commercial Free Trial · 14 Days Unlimited Features Included' : `${currentSub.price || '₹499/Month'} · All Features Included · No Locked Modules`}</p>
                 </div>
-                <span className="esb-hero-badge">
+                <span className="esb-hero-badge" style={isExpired ? { background: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA' } : {}}>
                     <span className="esb-dot" style={{ background: isExpired ? '#EF4444' : isTrial ? '#F59E0B' : '#10B981' }}></span>
-                    {isExpired ? (isTrial ? 'Trial Expired & Locked' : 'Expired & Locked') : isTrial ? 'Free Trial Active' : 'Premium Active'}
+                    {isExpired ? (isTrial ? 'Trial Expired & Locked' : 'Subscription Expired') : isTrial ? 'Free Trial Active' : 'Premium Active'}
                 </span>
             </div>
 
@@ -962,12 +1084,12 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
             <div className="esb-main-grid">
 
                 {/* CARD 1 — TIMER & STATUS */}
-                <div className="esb-card">
+                <div className={`esb-card ${isExpired ? 'esb-card-expired' : ''}`}>
                     <div className="esb-card-head">
-                        <span className={`esb-section-label ${isExpired ? 'label-slate' : isTrial ? '' : 'label-green'}`}
-                              style={isTrial ? { background: '#FEF3C7', color: '#D97706' } : {}}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isExpired ? '#94A3B8' : isTrial ? '#F59E0B' : '#10B981' }}></span>
-                            {isExpired ? 'EXPIRED' : isGrace ? 'GRACE PERIOD' : isTrial ? 'TRIAL ACTIVE' : 'SUBSCRIPTION ACTIVE'}
+                        <span className={`esb-section-label ${isExpired ? 'label-red' : isTrial ? '' : 'label-green'}`}
+                              style={isExpired ? { background: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA' } : isTrial ? { background: '#FEF3C7', color: '#D97706' } : {}}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isExpired ? '#EF4444' : isTrial ? '#F59E0B' : '#10B981' }}></span>
+                            {isExpired ? 'SUBSCRIPTION EXPIRED' : isGrace ? 'GRACE PERIOD' : isTrial ? 'TRIAL ACTIVE' : 'SUBSCRIPTION ACTIVE'}
                         </span>
                         <h3 className="esb-card-title">{resolvedPlanTitle}</h3>
                         <p className="esb-card-desc">Server-authoritative · Machine-bound · RSA-signed lease</p>
@@ -975,7 +1097,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
 
                     <div className="esb-card-body">
                         {/* Timer Tiles */}
-                        <div className="esb-timer-tiles">
+                        <div className={`esb-timer-tiles ${isExpired ? 'timer-tiles-expired' : ''}`}>
                             {[
                                 { val: isExpired ? '00' : String(countdown.days).padStart(2, '0'), lbl: 'Days' },
                                 { val: isExpired ? '00' : String(countdown.hours).padStart(2, '0'), lbl: 'Hours' },
@@ -1000,7 +1122,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                     <span className="esb-verif-check" style={!isExpired || i < 2 ? {} : { background: '#FEF2F2', borderColor: '#FECACA', color: '#DC2626' }}>
                                         {badge.startsWith('✗') ? '✗' : '✓'}
                                     </span>
-                                    <span>{badge.slice(2)}</span>
+                                    <span style={isExpired && i === 2 ? { color: '#DC2626', fontWeight: '700' } : {}}>{badge.slice(2)}</span>
                                 </div>
                             ))}
                         </div>
@@ -1009,23 +1131,35 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                         <div className="esb-progress-wrap">
                             <div className="esb-progress-header">
                                 <span>Subscription Lifetime Consumed</span>
-                                <strong>{subData.lifetime_consumed_percent || 0}%</strong>
+                                <strong style={isExpired ? { color: '#DC2626' } : {}}>{isExpired ? 100 : (subData.lifetime_consumed_percent || 0)}%</strong>
                             </div>
                             <div className="esb-progress-track">
-                                <div className="esb-progress-fill" style={{ width: `${Math.min(100, Math.max(0, subData.lifetime_consumed_percent || 0))}%` }}></div>
+                                <div className="esb-progress-fill" style={{ width: `${Math.min(100, Math.max(0, isExpired ? 100 : (subData.lifetime_consumed_percent || 0)))}%`, background: isExpired ? '#EF4444' : undefined }}></div>
                             </div>
                         </div>
 
                         {/* Meta bar */}
                         <div className="esb-meta-bar">
                             <span>Verified: <strong style={{ color: '#0F172A' }}>{subData.security?.last_verification || 'Just now'}</strong></span>
-                            <span><span className="esb-meta-dot"></span><strong style={{ color: '#059669' }}>Connected</strong></span>
+                            <span>
+                                <span className="esb-meta-dot" style={{ background: isExpired ? '#EF4444' : '#10B981' }}></span>
+                                <strong style={{ color: isExpired ? '#DC2626' : '#059669' }}>{isExpired ? 'Expired' : 'Connected'}</strong>
+                            </span>
                         </div>
 
                     </div>
 
                     <div className="esb-card-foot">
-                        {isPaidActive ? (
+                        {isExpired ? (
+                            <button
+                                onClick={handleOpenCheckout}
+                                disabled={processing}
+                                className="esb-btn esb-btn-red"
+                            >
+                                <FontAwesomeIcon icon={faRotate} spin={processing} />
+                                {processing ? 'Connecting to Razorpay...' : '🔄 Renew Subscription'}
+                            </button>
+                        ) : isPaidActive ? (
                             <div className="esb-active-plan-badge">
                                 <div className="esb-active-plan-check">✓</div>
                                 <div className="esb-active-plan-info">
@@ -1034,12 +1168,12 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                 </div>
                             </div>
                         ) : isTrial ? (
-                            <button onClick={handleOpenCheckout} disabled={processing} className="esb-btn esb-btn-purple">
-                                {processing ? 'Connecting to Razorpay...' : '🚀 Upgrade to Premium — ₹499 / Month'}
+                            <button onClick={handleOpenCheckout} className="esb-btn esb-btn-purple">
+                                🚀 Upgrade to Premium — ₹499 / Month
                             </button>
                         ) : (
-                            <button onClick={handleOpenCheckout} disabled={processing} className="esb-btn esb-btn-green">
-                                {processing ? 'Connecting to Razorpay...' : (isActive ? '⚡ Extend Subscription (+30 Days)' : '🔄 Renew Now — ₹499 / Month')}
+                            <button onClick={handleOpenCheckout} className="esb-btn esb-btn-green">
+                                {isActive ? '⚡ Extend Subscription (+30 Days)' : '🔄 Renew Subscription'}
                             </button>
                         )}
                     </div>
@@ -1088,7 +1222,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                     </div>
 
                     <div className="esb-card-foot">
-                        {subData.auto_renew ? (
+                        {subData.auto_renew && !isExpired ? (
                             <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
                                 <button
                                     type="button"
@@ -1114,11 +1248,11 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                             <button
                                 type="button"
                                 onClick={handleOpenCheckout}
-                                disabled={processing}
-                                className="esb-btn esb-btn-green"
+                                className={isExpired ? "esb-btn esb-btn-red" : "esb-btn esb-btn-green"}
                                 style={{ width: '100%' }}
                             >
-                                {processing ? 'Connecting to Razorpay...' : '⚡ Enable Auto-Renewal (₹499/Month)'}
+                                <FontAwesomeIcon icon={faRotate} />
+                                {isExpired ? ' 🔄 Renew Subscription (₹499/Month)' : ' ⚡ Enable Auto-Renewal (₹499/Month)'}
                             </button>
                         )}
                     </div>
@@ -1166,12 +1300,13 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                 Download GST Tax Invoice
                             </a>
                         ) : isTrial ? (
-                            <button onClick={handleOpenCheckout} disabled={processing} className="esb-btn esb-btn-purple">
-                                {processing ? 'Connecting to Razorpay...' : '🚀 Upgrade to Premium — ₹499 / Month'}
+                            <button onClick={handleOpenCheckout} className="esb-btn esb-btn-purple">
+                                🚀 Upgrade to Premium — ₹499 / Month
                             </button>
                         ) : (
-                            <button onClick={handleOpenCheckout} disabled={processing} className="esb-btn esb-btn-dark">
-                                {processing ? 'Connecting to Razorpay...' : (isActive ? '⚡ Extend Subscription (+30 Days)' : 'Pay Now — ₹499 / Month')}
+                            <button onClick={handleOpenCheckout} className={isExpired ? "esb-btn esb-btn-red" : "esb-btn esb-btn-dark"}>
+                                <FontAwesomeIcon icon={faRotate} />
+                                {isExpired ? ' 🔄 Renew Subscription (+30 Days)' : (isActive ? ' ⚡ Extend Subscription (+30 Days)' : ' Pay Now — ₹499 / Month')}
                             </button>
                         )}
                     </div>
@@ -1245,65 +1380,281 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '20px', marginBottom: '24px' }}>
                 
                 {/* PAYMENT HISTORY TABLE */}
-                <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                        <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0F172A', margin: 0 }}>
-                            Payment History
-                        </h3>
-                        <button style={{ background: '#F1F5F9', border: 'none', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', color: '#475569', cursor: 'pointer' }}>
-                            View All
-                        </button>
+                <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0F172A', margin: 0 }}>
+                                Payment History
+                            </h3>
+                            {realSubscriptions.length > 0 && (
+                                <span style={{ background: '#F1F5F9', color: '#475569', fontSize: '11.5px', fontWeight: '700', padding: '2px 8px', borderRadius: '12px' }}>
+                                    {realSubscriptions.length} {realSubscriptions.length === 1 ? 'Record' : 'Records'}
+                                </span>
+                            )}
+                        </div>
+                        {realSubscriptions.length > HISTORY_PAGE_SIZE && (
+                            <button
+                                onClick={() => setViewAllHistory(v => !v)}
+                                style={{
+                                    background: viewAllHistory ? '#059669' : '#F1F5F9',
+                                    color: viewAllHistory ? '#FFFFFF' : '#475569',
+                                    border: 'none',
+                                    padding: '6px 14px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                {viewAllHistory ? 'Paginate (10)' : 'View All'}
+                            </button>
+                        )}
                     </div>
 
-                    <div style={{ overflowX: 'auto' }}>
+                    {/* Scrollable Container with max height showing ~5 rows with smooth scroll */}
+                    <div
+                        className="esb-history-scroll-box"
+                        style={{
+                            maxHeight: '295px',
+                            overflowY: 'auto',
+                            overflowX: 'auto',
+                            border: '1px solid #F1F5F9',
+                            borderRadius: '10px',
+                            background: '#FFFFFF'
+                        }}
+                    >
                         {realSubscriptions.length > 0 ? (
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                 <thead>
-                                    <tr style={{ borderBottom: '2px solid #F1F5F9', textAlign: 'left', color: '#64748B' }}>
-                                        <th style={{ padding: '10px 12px' }}>Invoice</th>
-                                        <th style={{ padding: '10px 12px' }}>Plan</th>
-                                        <th style={{ padding: '10px 12px' }}>Amount</th>
-                                        <th style={{ padding: '10px 12px' }}>Gateway</th>
-                                        <th style={{ padding: '10px 12px' }}>Date</th>
-                                        <th style={{ padding: '10px 12px' }}>Status</th>
-                                        <th style={{ padding: '10px 12px', textAlign: 'center' }}>Download</th>
+                                    <tr style={{
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 3,
+                                        background: '#F8FAFC',
+                                        borderBottom: '2px solid #E2E8F0',
+                                        textAlign: 'left',
+                                        color: '#475569',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                                    }}>
+                                        <th style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>Invoice</th>
+                                        <th style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>Plan</th>
+                                        <th style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>Amount</th>
+                                        <th style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>Gateway</th>
+                                        <th style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>Date</th>
+                                        <th style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>Status</th>
+                                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {realSubscriptions.map((sub, idx) => (
-                                        <tr key={idx} style={{ borderBottom: '1px solid #F8FAFC' }}>
-                                            <td style={{ padding: '12px', fontWeight: '600', color: '#0F172A' }}>{sub.invoice_number}</td>
-                                            <td style={{ padding: '12px', color: '#475569' }}>{sub.plan_name || 'INFY-POS PREMIUM'}</td>
-                                            <td style={{ padding: '12px', fontWeight: '700', color: '#0F172A' }}>₹{sub.amount}.00</td>
-                                            <td style={{ padding: '12px', color: '#475569' }}>{sub.payment_method}</td>
-                                            <td style={{ padding: '12px', color: '#64748B' }}>{sub.paid_on}</td>
-                                            <td style={{ padding: '12px' }}>
-                                                <span style={{ background: '#ECFDF5', color: '#059669', padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' }}>
-                                                    {sub.status}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '12px', textAlign: 'center' }}>
-                                                <a
-                                                    href={`/billing/invoice/${sub.id || idx + 1}`}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', color: '#059669', width: '32px', height: '32px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                    title="Download GST Invoice"
-                                                >
-                                                    <FontAwesomeIcon icon={faDownload} />
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {(viewAllHistory ? realSubscriptions : realSubscriptions.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)).map((sub, idx) => {
+                                        const isPending = String(sub.status || '').toLowerCase() === 'pending';
+                                        const isFailed = String(sub.status || '').toLowerCase() === 'failed';
+                                        const isRetryingThis = retryingSubId === (sub.id || sub.invoice_number);
+
+                                        return (
+                                            <tr key={sub.id || idx} style={{ borderBottom: '1px solid #F8FAFC', transition: 'background 0.15s ease' }} className="esb-table-row">
+                                                <td style={{ padding: '11px 12px', fontWeight: '600', color: '#0F172A', whiteSpace: 'nowrap' }}>
+                                                    {sub.invoice_number}
+                                                </td>
+                                                <td style={{ padding: '11px 12px', color: '#475569', whiteSpace: 'nowrap' }}>
+                                                    {sub.plan_name || 'INFY-POS PREMIUM'}
+                                                </td>
+                                                <td style={{ padding: '11px 12px', fontWeight: '700', color: '#0F172A', whiteSpace: 'nowrap' }}>
+                                                    ₹{sub.amount}.00
+                                                </td>
+                                                <td style={{ padding: '11px 12px', color: '#475569', whiteSpace: 'nowrap' }}>
+                                                    {sub.payment_method}
+                                                </td>
+                                                <td style={{ padding: '11px 12px', color: '#64748B', whiteSpace: 'nowrap' }}>
+                                                    {sub.paid_on}
+                                                </td>
+                                                <td style={{ padding: '11px 12px', whiteSpace: 'nowrap' }}>
+                                                    {isPending ? (
+                                                        <span style={{
+                                                            background: '#FEF3C7',
+                                                            color: '#D97706',
+                                                            border: '1px solid #FDE68A',
+                                                            padding: '3px 10px',
+                                                            borderRadius: '12px',
+                                                            fontSize: '11px',
+                                                            fontWeight: '700',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px'
+                                                        }}>
+                                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B' }}></span>
+                                                            Pending
+                                                        </span>
+                                                    ) : isFailed ? (
+                                                        <span style={{
+                                                            background: '#FEF2F2',
+                                                            color: '#DC2626',
+                                                            border: '1px solid #FECACA',
+                                                            padding: '3px 10px',
+                                                            borderRadius: '12px',
+                                                            fontSize: '11px',
+                                                            fontWeight: '700',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px'
+                                                        }}>
+                                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#EF4444' }}></span>
+                                                            Failed
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{
+                                                            background: '#ECFDF5',
+                                                            color: '#059669',
+                                                            border: '1px solid #A7F3D0',
+                                                            padding: '3px 10px',
+                                                            borderRadius: '12px',
+                                                            fontSize: '11px',
+                                                            fontWeight: '700',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px'
+                                                        }}>
+                                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }}></span>
+                                                            {sub.status || 'Paid'}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '11px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                                                        {(isPending || isFailed) && (
+                                                            <button
+                                                                onClick={() => handleRetryPayment(sub)}
+                                                                disabled={isRetryingThis}
+                                                                title="Retry this pending transaction via Razorpay"
+                                                                style={{
+                                                                    background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                                                                    color: '#FFFFFF',
+                                                                    border: 'none',
+                                                                    borderRadius: '6px',
+                                                                    padding: '5px 11px',
+                                                                    fontSize: '11.5px',
+                                                                    fontWeight: '700',
+                                                                    cursor: isRetryingThis ? 'not-allowed' : 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '5px',
+                                                                    boxShadow: '0 2px 5px rgba(5,150,105,0.25)',
+                                                                    transition: 'all 0.2s ease'
+                                                                }}
+                                                            >
+                                                                <FontAwesomeIcon icon={faRotate} spin={isRetryingThis} />
+                                                                <span>{isRetryingThis ? 'Retrying...' : 'Retry'}</span>
+                                                            </button>
+                                                        )}
+                                                        <a
+                                                            href={`/billing/invoice/${sub.id || idx + 1}`}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            style={{
+                                                                background: '#F1F5F9',
+                                                                border: '1px solid #CBD5E1',
+                                                                color: isPending ? '#64748B' : '#059669',
+                                                                width: '30px',
+                                                                height: '30px',
+                                                                borderRadius: '6px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                fontSize: '12px'
+                                                            }}
+                                                            title={isPending ? "View Proforma / Pending Invoice" : "Download GST Invoice"}
+                                                        >
+                                                            <FontAwesomeIcon icon={faDownload} />
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         ) : (
-                            <div style={{ background: '#F8FAFC', border: '1px dashed #CBD5E1', padding: '24px', borderRadius: '12px', textAlign: 'center', color: '#64748B', fontSize: '13.5px', fontWeight: '600' }}>
+                            <div style={{ background: '#F8FAFC', padding: '24px', textAlign: 'center', color: '#64748B', fontSize: '13.5px', fontWeight: '600' }}>
                                 <FontAwesomeIcon icon={faClock} style={{ fontSize: '24px', color: '#10B981', marginBottom: '8px', display: 'block' }} />
                                 {isActive ? 'No online transactions recorded yet — Licensed via Hardware Machine Key' : 'No payments yet — 14-Day Free Trial Active'}
                             </div>
                         )}
                     </div>
+
+                    {/* Pagination Controls below table (After 10 items) */}
+                    {realSubscriptions.length > HISTORY_PAGE_SIZE && !viewAllHistory && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginTop: '14px',
+                            paddingTop: '12px',
+                            borderTop: '1px solid #F1F5F9',
+                            fontSize: '12px',
+                            color: '#64748B',
+                            flexWrap: 'wrap',
+                            gap: '8px'
+                        }}>
+                            <div>
+                                Showing <strong>{(historyPage - 1) * HISTORY_PAGE_SIZE + 1}</strong>–<strong>{Math.min(historyPage * HISTORY_PAGE_SIZE, realSubscriptions.length)}</strong> of <strong>{realSubscriptions.length}</strong>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <button
+                                    onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                                    disabled={historyPage === 1}
+                                    style={{
+                                        padding: '4px 10px',
+                                        borderRadius: '5px',
+                                        border: '1px solid #E2E8F0',
+                                        background: historyPage === 1 ? '#F8FAFC' : '#FFFFFF',
+                                        color: historyPage === 1 ? '#94A3B8' : '#0F172A',
+                                        fontWeight: '600',
+                                        fontSize: '11.5px',
+                                        cursor: historyPage === 1 ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    ← Prev
+                                </button>
+                                {Array.from({ length: Math.ceil(realSubscriptions.length / HISTORY_PAGE_SIZE) }, (_, i) => i + 1).map(pNum => (
+                                    <button
+                                        key={pNum}
+                                        onClick={() => setHistoryPage(pNum)}
+                                        style={{
+                                            minWidth: '28px',
+                                            height: '28px',
+                                            padding: '0 6px',
+                                            borderRadius: '5px',
+                                            border: historyPage === pNum ? '1px solid #059669' : '1px solid #E2E8F0',
+                                            background: historyPage === pNum ? '#059669' : '#FFFFFF',
+                                            color: historyPage === pNum ? '#FFFFFF' : '#334155',
+                                            fontWeight: '700',
+                                            fontSize: '11.5px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {pNum}
+                                    </button>
+                                ))}
+                                <button
+                                    onClick={() => setHistoryPage(p => Math.min(Math.ceil(realSubscriptions.length / HISTORY_PAGE_SIZE), p + 1))}
+                                    disabled={historyPage >= Math.ceil(realSubscriptions.length / HISTORY_PAGE_SIZE)}
+                                    style={{
+                                        padding: '4px 10px',
+                                        borderRadius: '5px',
+                                        border: '1px solid #E2E8F0',
+                                        background: historyPage >= Math.ceil(realSubscriptions.length / HISTORY_PAGE_SIZE) ? '#F8FAFC' : '#FFFFFF',
+                                        color: historyPage >= Math.ceil(realSubscriptions.length / HISTORY_PAGE_SIZE) ? '#94A3B8' : '#0F172A',
+                                        fontWeight: '600',
+                                        fontSize: '11.5px',
+                                        cursor: historyPage >= Math.ceil(realSubscriptions.length / HISTORY_PAGE_SIZE) ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    Next →
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* SUBSCRIPTION BENEFITS */}

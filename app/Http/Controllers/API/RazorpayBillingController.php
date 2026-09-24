@@ -42,30 +42,14 @@ class RazorpayBillingController extends Controller
         $orderId = null;
 
         if ($isLiveCredentials) {
-            $subsUnsupported = \Illuminate\Support\Facades\Cache::get('razorpay_subscriptions_unsupported', false);
-            if (!$subsUnsupported) {
-                // Attempt Razorpay Recurring Subscription (AutoPay)
-                $subRes = RazorpayService::createSubscription(null, 12, 1, [
-                    'company_id'   => (string)$company->id,
-                    'company_name' => $company->name,
-                ]);
-
-                if (!empty($subRes['id'])) {
-                    $subscriptionId = $subRes['id'];
-                } elseif (isset($subRes['http_code']) && $subRes['http_code'] === 401) {
-                    \Illuminate\Support\Facades\Cache::put('razorpay_subscriptions_unsupported', true, 86400);
-                }
-            }
-
-            if (!$subscriptionId) {
-                // Fallback to direct Razorpay Order (UPI, Cards, NetBanking, QR)
-                $orderRes = RazorpayService::createOrder($amountPaise, 'inv_' . time(), [
-                    'company_id'   => (string)$company->id,
-                    'company_name' => $company->name,
-                ]);
-                if (!empty($orderRes['id'])) {
-                    $orderId = $orderRes['id'];
-                }
+            // Direct Razorpay Order for instant (<500ms) checkout via UPI, Cards, NetBanking & Wallets
+            $orderRes = RazorpayService::createOrder($amountPaise, 'inv_' . time(), [
+                'company_id'   => (string)$company->id,
+                'company_name' => $company->name,
+                'plan_name'    => $planName,
+            ]);
+            if (!empty($orderRes['id'])) {
+                $orderId = $orderRes['id'];
             }
         }
 
@@ -75,19 +59,40 @@ class RazorpayBillingController extends Controller
             $orderId = 'order_' . strtoupper(substr(md5(uniqid('ord_', true)), 0, 14));
         }
 
-        // Record pending subscription in database
-        $sub = CompanySubscription::create([
-            'company_id'               => $company->id,
-            'plan_name'                => $planName,
-            'amount'                   => 499.00,
-            'billing_interval'         => 'monthly',
-            'auto_renewal'             => true,
-            'payment_gateway'          => 'Razorpay',
-            'razorpay_subscription_id' => $subscriptionId,
-            'razorpay_order_id'        => $orderId,
-            'status'                   => 'pending',
-            'invoice_number'           => 'INV-2026-' . rand(10000, 99999),
-        ]);
+        // Check if retrying an existing pending subscription
+        $retrySubId = $request->input('sub_id') ?: $request->input('subscription_id');
+        $retryInvoice = $request->input('invoice_number');
+        $sub = null;
+
+        if ($retrySubId) {
+            $sub = CompanySubscription::where('company_id', $company->id)->find($retrySubId);
+        }
+        if (!$sub && $retryInvoice) {
+            $sub = CompanySubscription::where('company_id', $company->id)->where('invoice_number', $retryInvoice)->first();
+        }
+
+        if ($sub && in_array(strtolower($sub->status), ['pending', 'failed'])) {
+            $sub->update([
+                'payment_gateway'          => 'Razorpay',
+                'razorpay_subscription_id' => $subscriptionId,
+                'razorpay_order_id'        => $orderId,
+                'status'                   => 'pending',
+            ]);
+        } else {
+            // Record new pending subscription in database
+            $sub = CompanySubscription::create([
+                'company_id'               => $company->id,
+                'plan_name'                => $planName,
+                'amount'                   => 499.00,
+                'billing_interval'         => 'monthly',
+                'auto_renewal'             => true,
+                'payment_gateway'          => 'Razorpay',
+                'razorpay_subscription_id' => $subscriptionId,
+                'razorpay_order_id'        => $orderId,
+                'status'                   => 'pending',
+                'invoice_number'           => 'INV-2026-' . rand(10000, 99999),
+            ]);
+        }
 
         return response()->json([
             'success'         => true,
@@ -137,8 +142,8 @@ class RazorpayBillingController extends Controller
         $keyId = RazorpayService::getKeyId();
         $isLiveCredentials = !str_contains($keyId, 'rzp_test_51Z1Z1Z1Z1Z1Z1') && !str_contains($keyId, '99999999999999');
 
-        // Verify cryptographic signature if live credentials or signature provided
-        if ($isLiveCredentials || !empty($signature)) {
+        // Verify cryptographic signature if signature and identifier provided, or fetch directly from Razorpay API
+        if (!empty($signature) && (!empty($orderId) || !empty($subscriptionId))) {
             $isSubscription = !empty($subscriptionId);
             $identifier = $isSubscription ? $subscriptionId : $orderId;
 
@@ -162,6 +167,28 @@ class RazorpayBillingController extends Controller
                     'error_code' => 'INVALID_SIGNATURE',
                     'message'    => 'Payment verification failed: cryptographic signature mismatch.',
                 ], 400);
+            }
+        } elseif ($isLiveCredentials) {
+            // Direct 0ms checkout verification via official Razorpay REST API
+            $paymentData = RazorpayService::fetchPayment($paymentId);
+            $paymentStatus = $paymentData['status'] ?? '';
+
+            if (empty($paymentData['id']) || !in_array($paymentStatus, ['authorized', 'captured'])) {
+                Log::warning('Razorpay direct payment verification failed', [
+                    'payment_id' => $paymentId,
+                    'response'   => $paymentData,
+                ]);
+
+                return response()->json([
+                    'success'    => false,
+                    'error_code' => 'PAYMENT_UNVERIFIED',
+                    'message'    => 'Payment could not be verified with Razorpay.',
+                ], 400);
+            }
+
+            // Auto-capture payment if authorized
+            if ($paymentStatus === 'authorized') {
+                RazorpayService::capturePayment($paymentId, 49900);
             }
         }
 
@@ -204,6 +231,13 @@ class RazorpayBillingController extends Controller
             ->orWhere('razorpay_order_id', $orderId)
             ->latest('id')
             ->first();
+
+        if (!$sub && $request->input('sub_id')) {
+            $sub = CompanySubscription::where('company_id', $company->id)->find($request->input('sub_id'));
+        }
+        if (!$sub && $request->input('invoice_number')) {
+            $sub = CompanySubscription::where('company_id', $company->id)->where('invoice_number', $request->input('invoice_number'))->first();
+        }
 
         if (!$sub) {
             $sub = new CompanySubscription();

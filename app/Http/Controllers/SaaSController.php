@@ -102,151 +102,10 @@ class SaaSController extends Controller
             $shouldCheckCloud = $forceCheck || !\Illuminate\Support\Facades\Cache::has($cacheKey);
 
             if ($shouldCheckCloud) {
-                \Illuminate\Support\Facades\Cache::put($cacheKey, true, 3); // 3-second cache buffer
                 try {
-                    $guid = \App\Services\LicenseGuardService::getLocalMachineGuid();
-                    $machineSha256 = \App\Services\MachineLockService::getMachineId();
-
-                    // 1A. CHECK SUPABASE MASTER COMPANY RECORD
-                    $trimmedName = trim($company->name);
-                    $compCheck = \App\Services\CloudLicenseServerService::supabaseRequest('/companies?name=ilike.' . urlencode($trimmedName) . '&limit=1');
-                    if (empty($compCheck['data']) && !empty($company->email)) {
-                        $compCheck = \App\Services\CloudLicenseServerService::supabaseRequest('/companies?email=eq.' . urlencode(trim($company->email)) . '&limit=1');
-                    }
-
-                    // ⚡ OFFLINE-FIRST RESILIENCE:
-                    // ONLY process cloud sync if we received a SUCCESSFUL response from Supabase!
-                    // If the internet is down/offline/disconnected (compCheck['success'] is false),
-                    // NEVER expire or wipe out the local database, local keys, or license token!
-                    if (!empty($compCheck['success'])) {
-                        $cloudCompany = $compCheck['data'][0] ?? null;
-
-                        if ($cloudCompany) {
-                            $cloudCompStatus    = strtolower($cloudCompany['status'] ?? 'active');
-                            $cloudCompSubEnds   = !empty($cloudCompany['subscription_ends_at']) ? Carbon::parse($cloudCompany['subscription_ends_at']) : null;
-                            $cloudCompTrialEnds = !empty($cloudCompany['trial_ends_at']) ? Carbon::parse($cloudCompany['trial_ends_at']) : null;
-                            $effectiveCloudEnds = $cloudCompSubEnds ?: $cloudCompTrialEnds;
-
-                            if ($cloudCompStatus === 'expired' || $cloudCompStatus === 'locked' || $cloudCompStatus === 'revoked' || ($effectiveCloudEnds && $effectiveCloudEnds->isPast())) {
-                                // Instant Cloud Expiry / Lockout Triggered by Super Admin!
-                                $isExpiredStatus = true;
-                                $company->status = 'expired';
-                                $company->subscription_ends_at = $effectiveCloudEnds ?: Carbon::now()->subDay();
-                                $company->save();
-
-                                // Expire all local keys
-                                ActivationKey::where('company_id', $company->id)->update([
-                                    'status'     => 'expired',
-                                    'expires_at' => $company->subscription_ends_at,
-                                ]);
-
-                                // Invalidate/expire queued and future subscriptions so they do not resurrect the store
-                                CompanySubscription::where('company_id', $company->id)
-                                    ->where(function($q) {
-                                        $q->where('status', 'queued')
-                                          ->orWhere('starts_at', '>', Carbon::now());
-                                    })->update([
-                                        'status' => 'expired'
-                                    ]);
-
-                                // Invalidate local active tokens
-                                @unlink('C:/ProgramData/INFY-POS Enterprise/license.token');
-                                if (function_exists('storage_path')) {
-                                    @unlink(storage_path('license/license.token'));
-                                    @unlink(storage_path('app/license.dat'));
-                                }
-                                \App\Services\LicenseGuardService::clearCache();
-                            } else {
-                                // Cloud company is active/trial, check for active key in cloud
-                                $cloudCompanyId = $cloudCompany['id'] ?? null;
-                                $hasCloudActiveKey = false;
-                                $latestCloudActiveKey = null;
-
-                                if ($cloudCompanyId) {
-                                    $activeCheck = \App\Services\CloudLicenseServerService::supabaseRequest(
-                                        '/activation_keys?company_id=eq.' . (int)$cloudCompanyId . '&status=eq.active&order=id.desc&limit=1'
-                                    );
-                                    if (!empty($activeCheck['success']) && !empty($activeCheck['data'][0])) {
-                                        $latestCloudActiveKey = $activeCheck['data'][0];
-                                        $cExpiry = !empty($latestCloudActiveKey['expires_at']) ? Carbon::parse($latestCloudActiveKey['expires_at']) : null;
-                                        if ($cExpiry && $cExpiry->isFuture()) {
-                                            $hasCloudActiveKey = true;
-                                        }
-                                    }
-                                }
-
-                                $isCloudStoreActive = (($cloudCompStatus === 'active' || $cloudCompStatus === 'trial') && $effectiveCloudEnds && $effectiveCloudEnds->isFuture());
-
-                                if ($isCloudStoreActive || $hasCloudActiveKey) {
-                                    // 1C. SYNC ACTIVE STORE / KEY FROM SUPABASE
-                                    $latestKeyCode     = $latestCloudActiveKey['key_code'] ?? null;
-                                    $latestKeyExpiry   = !empty($latestCloudActiveKey['expires_at']) ? Carbon::parse($latestCloudActiveKey['expires_at']) : null;
-                                    $finalExpiry       = ($latestKeyExpiry && $latestKeyExpiry->isFuture()) ? $latestKeyExpiry : ($effectiveCloudEnds ?: Carbon::now()->addDays(30));
-
-                                    $company->status = ($cloudCompStatus === 'trial') ? 'trial' : 'active';
-                                    $company->subscription_ends_at = $finalExpiry;
-                                    if ($cloudCompStatus === 'trial') {
-                                        $company->trial_ends_at = $finalExpiry;
-                                    }
-                                    $company->save();
-
-                                    $localKey = null;
-                                    if ($latestKeyCode) {
-                                        // Deactivate all old keys that do not match the latest cloud key
-                                        ActivationKey::where('company_id', $company->id)
-                                            ->where('key_code', '!=', $latestKeyCode)
-                                            ->update(['status' => 'expired']);
-
-                                        $localKey = ActivationKey::where('key_code', $latestKeyCode)->where('company_id', $company->id)->first();
-                                        if (!$localKey) {
-                                            $localKey = new ActivationKey();
-                                            $localKey->company_id = $company->id;
-                                            $localKey->key_code   = $latestKeyCode;
-                                        }
-                                    } else {
-                                        $localKey = ActivationKey::where('company_id', $company->id)->where('status', 'active')->latest('id')->first();
-                                        if (!$localKey) {
-                                            $localKey = new ActivationKey();
-                                            $localKey->company_id = $company->id;
-                                            $localKey->key_code   = 'INFYPOS-2026-KEY-' . strtoupper(substr(md5(uniqid()), 0, 8));
-                                        }
-                                    }
-
-                                    $localKey->status              = 'active';
-                                    $localKey->expires_at          = $finalExpiry;
-                                    $localKey->plan_name           = $latestCloudActiveKey['plan_name'] ?? (($cloudCompStatus === 'trial') ? 'INFY-POS FREE TRIAL (14 Days)' : 'INFY-POS PREMIUM (30 Days)');
-                                    $localKey->price               = $latestCloudActiveKey['price'] ?? 499;
-                                    $localKey->machine_fingerprint = $guid;
-                                    $localKey->activated_at        = !empty($latestCloudActiveKey['activated_at']) ? $latestCloudActiveKey['activated_at'] : Carbon::now();
-                                    $localKey->save();
-
-                                    // Refresh RSA token and claims cache
-                                    \App\Services\LicenseGuardService::clearCache();
-                                    \App\Services\LicenseGuardService::issueLicenseToken($company, $localKey);
-                                    $guardResult = \App\Services\LicenseGuardService::validate();
-                                    $guardClaims = $guardResult['valid'] ? ($guardResult['claims'] ?? []) : null;
-                                    $isExpiredStatus = false;
-                                } else {
-                                    // Cloud company exists, but has NO active status and NO active key
-                                    $isExpiredStatus = true;
-                                    $company->status = 'expired';
-                                    $company->subscription_ends_at = Carbon::now()->subDay();
-                                    $company->save();
-
-                                    ActivationKey::where('company_id', $company->id)->update([
-                                        'status'     => 'expired',
-                                        'expires_at' => $company->subscription_ends_at,
-                                    ]);
-
-                                    @unlink('C:/ProgramData/INFY-POS Enterprise/license.token');
-                                    if (function_exists('storage_path')) {
-                                        @unlink(storage_path('license/license.token'));
-                                        @unlink(storage_path('app/license.dat'));
-                                    }
-                                    \App\Services\LicenseGuardService::clearCache();
-                                }
-                            }
-                        }
+                    $syncResult = \App\Services\CloudLicenseServerService::syncCloudSubscription($company, $forceCheck);
+                    if (!empty($syncResult['success']) && ($syncResult['status'] ?? '') === 'expired') {
+                        $isExpiredStatus = true;
                     }
                 } catch (\Throwable $cloudEx) {}
             }
@@ -374,7 +233,7 @@ class SaaSController extends Controller
             // Subscriptions list directly from DB
             $subscriptions = CompanySubscription::where('company_id', $company->id)
                 ->orderByDesc('created_at')
-                ->limit(10)
+                ->limit(100)
                 ->get()
                 ->map(function ($sub) {
                     return [
@@ -501,15 +360,9 @@ class SaaSController extends Controller
                     ? Carbon::parse($latestPaidSub->starts_at)->format('d M Y')
                     : ($activationKey && $activationKey->activated_at ? Carbon::parse($activationKey->activated_at)->format('d M Y') : ($company->created_at ? $company->created_at->format('d M Y') : date('d M Y'))));
 
-            $finalPlanName    = ($activationKey && $activationKey->status === 'active' && !empty($activationKey->plan_name))
-                ? $activationKey->plan_name
-                : ($guardClaims['plan_name'] ?? ($company->status === 'trial' ? 'INFY-POS FREE TRIAL (14 Days)' : 'INFY-POS PREMIUM'));
-            $finalKeyCode     = ($activationKey && $activationKey->status === 'active' && !empty($activationKey->key_code))
-                ? $activationKey->key_code
-                : ($guardClaims['key_code'] ?? $keyCode);
-            $finalKeyExpires  = ($activationKey && $activationKey->status === 'active' && !empty($activationKey->expires_at))
-                ? Carbon::parse($activationKey->expires_at)->format('d M Y')
-                : ($guardClaims && !empty($guardClaims['expires_at']) ? date('d M Y', $guardClaims['expires_at']) : $keyExpires);
+            $finalPlanName    = $guardClaims['plan_name'] ?? ($company->status === 'trial' ? 'INFY-POS FREE TRIAL (14 Days)' : ($activationKey->plan_name ?? 'INFY-POS PREMIUM'));
+            $finalKeyCode     = $guardClaims['key_code'] ?? $keyCode;
+            $finalKeyExpires  = $guardClaims && !empty($guardClaims['expires_at']) ? date('d M Y', $guardClaims['expires_at']) : $keyExpires;
 
             // Real Automated Vault Status
             $backupMetaFile = storage_path('app/backups/backup_meta.json');
@@ -547,6 +400,32 @@ class SaaSController extends Controller
                 $isActuallyExpired = $isExpiredStatus || $company->status === 'expired' || $diffSeconds <= 0;
             }
 
+            $isSuspended = ($entStatus['status'] ?? '') === 'suspended' || in_array($company->status, ['suspended', 'locked', 'revoked']);
+            if ($isSuspended) {
+                return response()->json([
+                    'status'                    => 'suspended',
+                    'is_suspended'              => true,
+                    'is_active'                 => false,
+                    'is_trial'                  => false,
+                    'is_expired'                => false,
+                    'days_remaining'            => 0,
+                    'target_timestamp'          => 0,
+                    'hours_remaining'           => 0,
+                    'minutes_remaining'         => 0,
+                    'seconds_remaining'         => 0,
+                    'remaining_seconds'         => 0,
+                    'company_name'              => $finalCompanyName,
+                    'key_code'                  => $finalKeyCode,
+                    'plan_name'                 => $finalPlanName,
+                    'message'                   => 'Account Suspended by Super Admin. Hardware terminal access is restricted.',
+                    'support'                   => [
+                        'phone'    => '+91 86100 06544',
+                        'whatsapp' => 'https://wa.me/918610006544',
+                        'email'    => 'support@infypos.com',
+                    ]
+                ]);
+            }
+
             return response()->json([
                 'status'                    => $isActuallyExpired ? 'expired' : $company->status,
                 'days_remaining'            => $isActuallyExpired ? 0 : $daysLeft,
@@ -571,6 +450,7 @@ class SaaSController extends Controller
                 'price'                     => str_contains(strtolower($finalPlanName), 'trial') ? 'Free Trial (₹0)' : '₹499/Month',
                 'auto_renew'                => (bool) ($company->auto_renew ?? false),
                 'payment_method'            => 'Razorpay / UPI / Cards',
+                'razorpay_key_id'           => \App\Services\RazorpayService::getKeyId(),
                 'key_code'                  => $finalKeyCode,
                 'key_status'                => ($isExpiredStatus || $isKeyExpired) ? 'Expired' : 'Active',
                 'key_expires'               => $finalKeyExpires,
@@ -786,8 +666,8 @@ class SaaSController extends Controller
 
             // Live Sync to Central Cloud DB (Supabase)
             try {
-                $compCheck = \App\Services\CloudLicenseServerService::supabaseRequest('/companies?name=eq.' . urlencode($company->name));
-                $cloudCompanyId = $compCheck['data'][0]['id'] ?? 3;
+                $cloudComp = \App\Services\CloudLicenseServerService::findCompanyRecord($company);
+                $cloudCompanyId = $cloudComp['id'] ?? 3;
 
                 \App\Services\CloudLicenseServerService::supabaseRequest('/activation_keys?key_code=eq.' . urlencode($keyCode), 'PATCH', [
                     'status'              => 'active',
@@ -1156,8 +1036,8 @@ class SaaSController extends Controller
 
                 // 3. Sync queued key to Central Cloud Database (Supabase) without touching active key
                 try {
-                    $compCheck = \App\Services\CloudLicenseServerService::supabaseRequest('/companies?name=eq.' . urlencode($company->name));
-                    $cloudCompanyId = $compCheck['data'][0]['id'] ?? 3;
+                    $cloudComp = \App\Services\CloudLicenseServerService::findCompanyRecord($company);
+                    $cloudCompanyId = $cloudComp['id'] ?? 3;
 
                     $machineUuid = \App\Services\MachineLockService::getMachineId();
                     \App\Services\CloudLicenseServerService::supabaseRequest('/activation_keys', 'POST', [
@@ -1205,8 +1085,8 @@ class SaaSController extends Controller
 
                 // ── Live Sync new key & company to Central Cloud Database (Supabase) ──
                 try {
-                    $compCheck = \App\Services\CloudLicenseServerService::supabaseRequest('/companies?name=eq.' . urlencode($company->name));
-                    $cloudCompanyId = $compCheck['data'][0]['id'] ?? 3;
+                    $cloudComp = \App\Services\CloudLicenseServerService::findCompanyRecord($company);
+                    $cloudCompanyId = $cloudComp['id'] ?? 3;
 
                     \App\Services\CloudLicenseServerService::supabaseRequest('/companies?id=eq.' . $cloudCompanyId, 'PATCH', [
                         'status'               => 'active',
