@@ -212,6 +212,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
     });
 
     useEffect(() => {
+        ensureRazorpayLoaded();
         initLicenseSdk();
         fetchSubscriptionStatus();
 
@@ -537,24 +538,23 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         setTimeout(() => setToastMsg(null), 4000);
     };
 
-    // Open Payment Checkout Modal
-    const handleOpenCheckout = (e) => {
+    // Direct Razorpay Checkout on button click (No intermediate modal, opens immediately)
+    const handleOpenCheckout = async (e) => {
         if (e) e.preventDefault();
-        setPaymentSuccess(false);
-        setProcessing(false);
-        setShowModal(true);
+        if (processing) return;
+        await handleExecutePayment();
     };
 
-    // Execute Official Razorpay Subscription / AutoPay Checkout
+    // Execute Official Razorpay Checkout directly
     const handleExecutePayment = async () => {
         setProcessing(true);
         try {
             await ensureRazorpayLoaded();
 
-            // 1. Call Backend to create authoritative subscription
+            // 1. Call Backend to create authoritative order (<500ms)
             const initRes = await axios.post('/api/billing/razorpay/subscription');
             if (!initRes.data || !initRes.data.success) {
-                alert('Could not initialize Razorpay subscription. ' + (initRes.data?.message || 'Please try again.'));
+                alert('Could not initialize Razorpay checkout. ' + (initRes.data?.message || 'Please try again.'));
                 setProcessing(false);
                 return;
             }
@@ -564,12 +564,12 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
             // 2. Configure Official Razorpay Checkout
             const options = {
                 key: payData.key_id,
+                order_id: payData.order_id,
                 subscription_id: payData.subscription_id || undefined,
-                order_id: payData.subscription_id ? undefined : payData.order_id,
                 amount: payData.amount || 49900,
                 currency: payData.currency || 'INR',
                 name: 'INFY-POS Enterprise',
-                description: 'INFY-POS PREMIUM (₹499/Month) — Auto-Renewal',
+                description: 'INFY-POS PREMIUM (+30 Days Extension)',
                 prefill: payData.prefill || {},
                 theme: { color: '#059669' },
                 modal: {
@@ -586,17 +586,13 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                             razorpay_subscription_id: response.razorpay_subscription_id || payData.subscription_id,
                             razorpay_order_id: response.razorpay_order_id || payData.order_id,
                             razorpay_signature: response.razorpay_signature,
-                            payment_method: 'Razorpay AutoPay / UPI / Cards',
+                            payment_method: 'Razorpay / UPI / Cards',
                         });
 
                         if (verifyRes.data && verifyRes.data.success) {
-                            setPaymentSuccess(true);
-                            setSuccessMsg(verifyRes.data.message || 'Payment verified! INFY-POS PREMIUM activated.');
+                            showToast(verifyRes.data.message || 'Payment verified! Subscription extended (+30 Days).');
                             localStorage.removeItem('sub_banner_dismissed_until');
                             await fetchSubscriptionStatus();
-                            setTimeout(() => {
-                                setShowModal(false);
-                            }, 2000);
                         } else {
                             alert('Verification Failed: ' + (verifyRes.data?.message || 'Invalid cryptographic signature'));
                         }
@@ -615,8 +611,10 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                     setProcessing(false);
                 });
                 rzp.open();
+                // When modal opens, clear button loading
+                setProcessing(false);
             } else {
-                alert('Razorpay Checkout SDK is loading. Please click Continue again in 2 seconds.');
+                alert('Razorpay Checkout SDK is loading. Please try again in 1 second.');
                 setProcessing(false);
             }
         } catch (err) {
@@ -1036,12 +1034,12 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                 </div>
                             </div>
                         ) : isTrial ? (
-                            <button onClick={handleOpenCheckout} className="esb-btn esb-btn-purple">
-                                🚀 Upgrade to Premium — ₹499 / Month
+                            <button onClick={handleOpenCheckout} disabled={processing} className="esb-btn esb-btn-purple">
+                                {processing ? 'Connecting to Razorpay...' : '🚀 Upgrade to Premium — ₹499 / Month'}
                             </button>
                         ) : (
-                            <button onClick={handleOpenCheckout} className="esb-btn esb-btn-green">
-                                {isActive ? '⚡ Extend Subscription (+30 Days)' : '🔄 Renew Now — ₹499 / Month'}
+                            <button onClick={handleOpenCheckout} disabled={processing} className="esb-btn esb-btn-green">
+                                {processing ? 'Connecting to Razorpay...' : (isActive ? '⚡ Extend Subscription (+30 Days)' : '🔄 Renew Now — ₹499 / Month')}
                             </button>
                         )}
                     </div>
@@ -1116,10 +1114,11 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                             <button
                                 type="button"
                                 onClick={handleOpenCheckout}
+                                disabled={processing}
                                 className="esb-btn esb-btn-green"
                                 style={{ width: '100%' }}
                             >
-                                ⚡ Enable Auto-Renewal (₹499/Month)
+                                {processing ? 'Connecting to Razorpay...' : '⚡ Enable Auto-Renewal (₹499/Month)'}
                             </button>
                         )}
                     </div>
@@ -1167,12 +1166,12 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                 Download GST Tax Invoice
                             </a>
                         ) : isTrial ? (
-                            <button onClick={handleOpenCheckout} className="esb-btn esb-btn-purple">
-                                🚀 Upgrade to Premium — ₹499 / Month
+                            <button onClick={handleOpenCheckout} disabled={processing} className="esb-btn esb-btn-purple">
+                                {processing ? 'Connecting to Razorpay...' : '🚀 Upgrade to Premium — ₹499 / Month'}
                             </button>
                         ) : (
-                            <button onClick={handleOpenCheckout} className="esb-btn esb-btn-dark">
-                                {isActive ? '⚡ Extend Subscription (+30 Days)' : 'Pay Now — ₹499 / Month'}
+                            <button onClick={handleOpenCheckout} disabled={processing} className="esb-btn esb-btn-dark">
+                                {processing ? 'Connecting to Razorpay...' : (isActive ? '⚡ Extend Subscription (+30 Days)' : 'Pay Now — ₹499 / Month')}
                             </button>
                         )}
                     </div>
