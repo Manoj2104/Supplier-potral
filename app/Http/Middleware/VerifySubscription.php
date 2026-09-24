@@ -18,9 +18,9 @@ class VerifySubscription
         'login', 'logout', 'forgot-password', 'reset-password',
         'api/login', 'api/logout', 'api/forgot-password', 'api/reset-password',
         'api/m1/login', 'api/m1/logout', 'api/m1/forgot-password', 'api/m1/reset-password',
-        'install', 'install/*', 'saas/*', 'landing',
+        'install', 'install/*', 'saas/*', 'landing', 'super-admin*', 'saas-admin*',
         'api/config', 'api/front-setting', 'api/permissions', 'api/settings', 'api/languages', 'api/languages/*', 'api/currencies', 'api/currencies/*', 'api/report-product-quantity',
-        'api/saas/*', 'api/payment/*', 'api/saas-admin/*', 'api/saas-admin', 'api/license/*', 'api/subscription*',
+        'api/saas/*', 'api/payment/*', 'api/saas-admin/*', 'api/saas-admin', 'api/super-admin/*', 'api/super-admin', 'api/license/*', 'api/subscription*',
         'api/v1/license/*', 'api/v1/license', 'api/v1/subscription*', 'api/v1/subscription',
         'api/billing/*', 'api/billing', 'api/webhooks/*', 'api/webhooks',
     ];

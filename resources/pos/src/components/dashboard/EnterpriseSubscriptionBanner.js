@@ -113,6 +113,15 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
     const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
     const [toastMsg, setToastMsg] = useState(null);
 
+    // Server-Authoritative Active Payment Provider State
+    const [providerInfo, setProviderInfo] = useState({
+        provider: 'razorpay',
+        razorpay_enabled: true,
+        system_payment_enabled: false,
+    });
+    const [showSystemModal, setShowSystemModal] = useState(false);
+    const [processingSystemPayment, setProcessingSystemPayment] = useState(false);
+
     // Payment History Pagination & Retry States
     const [historyPage, setHistoryPage] = useState(1);
     const [viewAllHistory, setViewAllHistory] = useState(false);
@@ -209,6 +218,18 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         }
     };
 
+    // Fetch server-authoritative active payment provider configuration
+    const fetchPaymentProvider = async () => {
+        try {
+            const res = await axios.get('/api/payment/provider');
+            if (res.data && res.data.success && res.data.data) {
+                setProviderInfo(res.data.data);
+            }
+        } catch (err) {
+            console.warn('Could not fetch active payment provider:', err);
+        }
+    };
+
     // ── SERVER-AUTHORITATIVE MONOTONIC TIMER TICKER (EVERY SECOND) ──
     // Uses performance.now() elapsed ticks from server baseline.
     // Client clock manipulation (changing Windows date/time) cannot extend subscription!
@@ -221,6 +242,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         ensureRazorpayLoaded();
         initLicenseSdk();
         fetchSubscriptionStatus();
+        fetchPaymentProvider();
 
         // ⚡ 0ms INSTANT EVENT LISTENER — updates timer and state immediately without lag
         const handleStatusUpdate = (e) => {
@@ -414,9 +436,9 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
     const hasZeroRemaining = (typeof currentSub.remaining_seconds === 'number' && currentSub.remaining_seconds <= 0) ||
                              (typeof currentSub.days_remaining === 'number' && currentSub.days_remaining <= 0);
 
-    const isExplicitExpired = rawStatus === 'expired' || rawStatus === 'locked' || rawStatus === 'revoked' || rawStatus === 'access_locked' || Boolean(currentSub.is_expired);
-    const isTimeExpired = isZeroCountdown && (isPastEndDate || hasZeroRemaining || isExplicitExpired || currentSub.valid === false);
-    const isTrialExpired = (rawStatus === 'trial' || Boolean(currentSub.is_trial)) && (daysLeft <= 0 || isZeroCountdown);
+    const isExplicitExpired = rawStatus === 'expired' || rawStatus === 'locked' || rawStatus === 'revoked' || rawStatus === 'access_locked' || Boolean(currentSub.is_expired) || currentSub.valid === false;
+    const isTimeExpired = isPastEndDate || hasZeroRemaining || (isZeroCountdown && (!currentSub.valid || isExplicitExpired));
+    const isTrialExpired = (rawStatus === 'trial' || Boolean(currentSub.is_trial)) && (daysLeft <= 0 || isZeroCountdown || isPastEndDate);
 
     const isExpired = Boolean(isExplicitExpired || isTimeExpired || isTrialExpired);
     const isServerValid = !isExpired && (Boolean(currentSub.valid) || rawStatus === 'active' || Boolean(currentSub.is_active));
@@ -564,11 +586,26 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         setTimeout(() => setToastMsg(null), 4000);
     };
 
-    // ⚡ 0ms INSTANT CHECKOUT — Opens official Razorpay modal immediately on click without network delay
+    // Handle Authoritative Payment Checkout routing based on Super Admin payment provider
     const handleOpenCheckout = (e) => {
         if (e) e.preventDefault();
 
-        const keyId = subData?.razorpay_key_id || 'rzp_test_TfUvXTbtZxl0LL';
+        const currentProvider = providerInfo?.provider || (providerInfo?.razorpay_enabled ? 'razorpay' : 'none');
+
+        // Check if all payments are disabled
+        if (currentProvider === 'none' || (!providerInfo?.razorpay_enabled && !providerInfo?.system_payment_enabled)) {
+            alert('Payments are temporarily unavailable. Please contact the administrator.');
+            return;
+        }
+
+        // Direct System Payment Gateway
+        if (currentProvider === 'system') {
+            setShowSystemModal(true);
+            return;
+        }
+
+        // Razorpay Payment Gateway (Instant Checkout)
+        const keyId = providerInfo?.razorpay_key_id || subData?.razorpay_key_id || 'rzp_test_TfUvXTbtZxl0LL';
 
         if (typeof window.Razorpay !== 'function') {
             alert('Razorpay Checkout SDK is loading. Please check your internet connection and try again.');
@@ -604,7 +641,9 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                     if (verifyRes.data && verifyRes.data.success) {
                         showToast(verifyRes.data.message || 'Payment verified! Subscription extended (+30 Days).');
                         localStorage.removeItem('sub_banner_dismissed_until');
-                        await fetchSubscriptionStatus();
+                        applySubscriptionUpdate(verifyRes.data);
+                        await fetchSubscriptionStatus(true);
+                        await fetchPaymentProvider();
                     } else {
                         alert('Verification Failed: ' + (verifyRes.data?.message || 'Transaction could not be verified.'));
                     }
@@ -619,6 +658,35 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
             alert('Payment Failed: ' + (resp.error?.description || 'Transaction was declined'));
         });
         rzp.open();
+    };
+
+    // Confirm & Process System Payment Gateway (+30 Days Extension)
+    const handleConfirmSystemPayment = async () => {
+        try {
+            setProcessingSystemPayment(true);
+            const res = await axios.post('/api/payment/system/process', {
+                plan: 'INFY-POS PREMIUM',
+                amount: 499,
+                notes: 'System Payment - Direct Enterprise License Extension (+30 Days)'
+            });
+
+            if (res.data && res.data.success) {
+                showToast(res.data.message || 'System Payment verified! Subscription extended (+30 Days).');
+                setShowSystemModal(false);
+                localStorage.removeItem('sub_banner_dismissed_until');
+                if (res.data.data) {
+                    applySubscriptionUpdate(res.data.data);
+                }
+                await fetchSubscriptionStatus(true);
+                await fetchPaymentProvider();
+            } else {
+                alert('System Payment Failed: ' + (res.data?.message || 'Could not process transaction.'));
+            }
+        } catch (err) {
+            alert('System Payment Error: ' + (err.response?.data?.message || err.message));
+        } finally {
+            setProcessingSystemPayment(false);
+        }
     };
 
     // Execute Retry for a specific pending payment in the history table
@@ -675,7 +743,8 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                         if (verifyRes.data && verifyRes.data.success) {
                             showToast(verifyRes.data.message || `Payment verified for ${sub.invoice_number}! Subscription renewed.`);
                             localStorage.removeItem('sub_banner_dismissed_until');
-                            await fetchSubscriptionStatus();
+                            applySubscriptionUpdate(verifyRes.data);
+                            await fetchSubscriptionStatus(true);
                         } else {
                             alert('Verification Failed: ' + (verifyRes.data?.message || 'Invalid cryptographic signature'));
                         }
@@ -938,40 +1007,19 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
 
             {/* ── SUBSCRIPTION EXPIRED ALERT BANNER ── */}
             {isExpired && (
-                <div style={{
-                    background: '#FEF2F2',
-                    border: '1.5px solid #FECACA',
-                    color: '#991B1B',
-                    padding: '14px 20px',
-                    borderRadius: '12px',
-                    marginBottom: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    boxShadow: '0 2px 10px rgba(220, 38, 38, 0.08)',
-                    fontSize: '14px',
-                    fontWeight: '700'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <FontAwesomeIcon icon={faTriangleExclamation} style={{ fontSize: '18px', color: '#DC2626' }} />
-                        <span>🚨 Your subscription has expired. Please renew your plan to restore full POS access.</span>
+                <div className="esb-expired-banner-premium">
+                    <div className="esb-expired-banner-left">
+                        <div className="esb-expired-icon-bubble">
+                            <FontAwesomeIcon icon={faLock} />
+                        </div>
+                        <div>
+                            <div className="esb-expired-banner-title">Subscription Expired & Terminal Locked</div>
+                            <div className="esb-expired-banner-desc">Your plan ended on {subData.subscription_ends_at || subData.next_billing_date || '22 Sep 2026'}. Renew now to unlock sales, inventory & all POS capabilities.</div>
+                        </div>
                     </div>
-                    <button
-                        onClick={handleOpenCheckout}
-                        disabled={processing}
-                        style={{
-                            background: '#DC2626',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            padding: '8px 18px',
-                            borderRadius: '8px',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap'
-                        }}
-                    >
-                        {processing ? 'Connecting...' : '🔄 Renew Now'}
+                    <button onClick={handleOpenCheckout} disabled={processing} className="esb-expired-banner-btn">
+                        <FontAwesomeIcon icon={faRotate} spin={processing} />
+                        <span>{processing ? 'Connecting...' : 'Renew Instantly (₹499)'}</span>
                     </button>
                 </div>
             )}
@@ -1152,12 +1200,14 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                     <div className="esb-card-foot">
                         {isExpired ? (
                             <button
+                                type="button"
                                 onClick={handleOpenCheckout}
                                 disabled={processing}
                                 className="esb-btn esb-btn-red"
+                                style={{ width: '100%' }}
                             >
                                 <FontAwesomeIcon icon={faRotate} spin={processing} />
-                                {processing ? 'Connecting to Razorpay...' : '🔄 Renew Subscription'}
+                                <span>{processing ? 'Connecting to Razorpay...' : '🔄 Renew Subscription (₹499/Month)'}</span>
                             </button>
                         ) : isPaidActive ? (
                             <div className="esb-active-plan-badge">
@@ -1266,20 +1316,46 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                             {isPaidActive ? 'ENTERPRISE SUPPORT' : 'PAY SECURELY'}
                         </span>
                         <h3 className="esb-card-title">
-                            {isPaidActive ? '24/7 Priority Support' : 'Secure Razorpay Checkout'}
+                            {isPaidActive ? '24/7 Priority Support' : (providerInfo?.provider === 'system' ? 'INFY-POS System Payment' : 'Secure Razorpay Checkout')}
                         </h3>
                         <p className="esb-card-desc">
-                            {isPaidActive ? 'Your account includes dedicated support and GST invoices.' : 'Instant 30-day activation. All major payment methods accepted.'}
+                            {isPaidActive ? 'Your account includes dedicated support and GST invoices.' : (providerInfo?.provider === 'system' ? 'Direct internal settlement. Instant 30-day activation.' : 'Instant 30-day activation. All major payment methods accepted.')}
                         </p>
                     </div>
 
                     <div className="esb-card-body">
-                        {/* Payment logos */}
-                        <div className="esb-payment-logos">
-                            {['UPI', 'VISA', 'MasterCard', 'RuPay', 'Paytm', 'NetBanking'].map((logo, i) => (
-                                <span key={i} className="esb-pay-logo">{logo}</span>
-                            ))}
+                        {/* Active Provider Indicator Badge */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '12px' }}>
+                            <span style={{ fontSize: '11.5px', color: '#64748B', fontWeight: '600' }}>Active Provider:</span>
+                            {providerInfo?.provider === 'razorpay' ? (
+                                <span style={{ fontSize: '11px', fontWeight: '700', color: '#059669', background: '#ECFDF5', padding: '2px 8px', borderRadius: '9999px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }}></span>
+                                    Razorpay Payment
+                                </span>
+                            ) : providerInfo?.provider === 'system' ? (
+                                <span style={{ fontSize: '11px', fontWeight: '700', color: '#2563EB', background: '#EFF6FF', padding: '2px 8px', borderRadius: '9999px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3B82F6' }}></span>
+                                    System Payment
+                                </span>
+                            ) : (
+                                <span style={{ fontSize: '11px', fontWeight: '700', color: '#DC2626', background: '#FEF2F2', padding: '2px 8px', borderRadius: '9999px' }}>
+                                    Unavailable
+                                </span>
+                            )}
                         </div>
+
+                        {/* Payment logos / System info */}
+                        {providerInfo?.provider === 'system' ? (
+                            <div style={{ padding: '8px 12px', background: '#F1F5F9', borderRadius: '8px', fontSize: '12px', color: '#334155', marginBottom: '10px' }}>
+                                <strong>System Engine</strong> — Direct settlement & immediate cryptographic license lease generation.
+                            </div>
+                        ) : (
+                            <div className="esb-payment-logos">
+                                {['UPI', 'VISA', 'MasterCard', 'RuPay', 'Paytm', 'NetBanking'].map((logo, i) => (
+                                    <span key={i} className="esb-pay-logo">{logo}</span>
+                                ))}
+                            </div>
+                        )}
 
                         <ul className="esb-checklist">
                             <li><FontAwesomeIcon icon={faCheckCircle} /> Instant Activation</li>
@@ -1377,7 +1453,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
             </div>
 
             {/* ── MIDDLE ROW: PAYMENT HISTORY TABLE & SUBSCRIPTION BENEFITS ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '20px', marginBottom: '24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.38fr 1.02fr', gap: '20px', marginBottom: '24px' }}>
                 
                 {/* PAYMENT HISTORY TABLE */}
                 <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
@@ -1522,7 +1598,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                                 </td>
                                                 <td style={{ padding: '11px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-                                                        {(isPending || isFailed) && (
+                                                        {(isPending || isFailed) ? (
                                                             <button
                                                                 onClick={() => handleRetryPayment(sub)}
                                                                 disabled={isRetryingThis}
@@ -1532,7 +1608,7 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                                                     color: '#FFFFFF',
                                                                     border: 'none',
                                                                     borderRadius: '6px',
-                                                                    padding: '5px 11px',
+                                                                    padding: '5px 12px',
                                                                     fontSize: '11.5px',
                                                                     fontWeight: '700',
                                                                     cursor: isRetryingThis ? 'not-allowed' : 'pointer',
@@ -1546,27 +1622,31 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                                                                 <FontAwesomeIcon icon={faRotate} spin={isRetryingThis} />
                                                                 <span>{isRetryingThis ? 'Retrying...' : 'Retry'}</span>
                                                             </button>
+                                                        ) : (
+                                                            <a
+                                                                href={`/billing/invoice/${sub.id || idx + 1}`}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                style={{
+                                                                    background: '#ECFDF5',
+                                                                    border: '1px solid #A7F3D0',
+                                                                    color: '#059669',
+                                                                    padding: '5px 11px',
+                                                                    borderRadius: '6px',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '5px',
+                                                                    fontSize: '12px',
+                                                                    fontWeight: '600',
+                                                                    textDecoration: 'none',
+                                                                    transition: 'all 0.15s ease'
+                                                                }}
+                                                                title="Download GST Invoice"
+                                                            >
+                                                                <FontAwesomeIcon icon={faDownload} />
+                                                                <span>Invoice</span>
+                                                            </a>
                                                         )}
-                                                        <a
-                                                            href={`/billing/invoice/${sub.id || idx + 1}`}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            style={{
-                                                                background: '#F1F5F9',
-                                                                border: '1px solid #CBD5E1',
-                                                                color: isPending ? '#64748B' : '#059669',
-                                                                width: '30px',
-                                                                height: '30px',
-                                                                borderRadius: '6px',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                fontSize: '12px'
-                                                            }}
-                                                            title={isPending ? "View Proforma / Pending Invoice" : "Download GST Invoice"}
-                                                        >
-                                                            <FontAwesomeIcon icon={faDownload} />
-                                                        </a>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1660,32 +1740,110 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                 {/* SUBSCRIPTION BENEFITS */}
                 <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <div>
-                        <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0F172A', margin: '0 0 16px' }}>
-                            Subscription Benefits
-                        </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0F172A', margin: 0 }}>
+                                Subscription Benefits
+                            </h3>
+                            <span style={{ background: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' }}>
+                                12 Features Unlocked
+                            </span>
+                        </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px', color: '#334155', marginBottom: '24px' }}>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Unlimited Billing</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Unlimited Invoices</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Unlimited Products</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Advanced Reports</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Unlimited Users</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Multi-Store Management</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Unlimited Warehouses</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Cloud Backup</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Unlimited PDA & Scanner</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Priority Support</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Unlimited Barcode Printing</div>
-                            <div><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981', marginRight: '6px' }} /> Free Software Updates</div>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                            gap: '9px 12px',
+                            marginBottom: '16px'
+                        }}>
+                            {[
+                                'Unlimited Billing',
+                                'Unlimited Invoices',
+                                'Unlimited Products',
+                                'Advanced Analytics',
+                                'Unlimited Users',
+                                'Multi-Store Sync',
+                                'Unlimited Warehouses',
+                                'Cloud Auto-Backup',
+                                'PDA & Mobile POS',
+                                'Priority 24/7 Support',
+                                'Barcode Printing',
+                                'Free System Updates',
+                            ].map((benefit, bIdx) => (
+                                <div
+                                    key={bIdx}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '9px',
+                                        padding: '8px 12px',
+                                        background: '#F8FAFC',
+                                        border: '1px solid #E2E8F0',
+                                        borderRadius: '8px',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        color: '#1E293B',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                                    }}
+                                >
+                                    <span style={{
+                                        width: '18px',
+                                        height: '18px',
+                                        borderRadius: '50%',
+                                        background: '#DCFCE7',
+                                        color: '#16A34A',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '9.5px',
+                                        flexShrink: 0
+                                    }}>
+                                        <FontAwesomeIcon icon={faCheck} />
+                                    </span>
+                                    <span style={{
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        lineHeight: 1.2
+                                    }}>
+                                        {benefit}
+                                    </span>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-                        <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#10B981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', fontSize: '20px' }}>
+                    <div style={{
+                        background: 'linear-gradient(135deg, #ECFDF5 0%, #F0FDF4 100%)',
+                        border: '1px solid #A7F3D0',
+                        borderRadius: '12px',
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                    }}>
+                        <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            background: '#10B981',
+                            color: '#FFFFFF',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '18px',
+                            flexShrink: 0,
+                            boxShadow: '0 2px 8px rgba(16,185,129,0.3)'
+                        }}>
                             <FontAwesomeIcon icon={faCheck} />
                         </div>
-                        <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#065F46', margin: '0 0 4px' }}>You're covered!</h4>
-                        <p style={{ fontSize: '12px', color: '#047857', margin: 0 }}>Enjoy all premium enterprise features with INFY-POS.</p>
+                        <div>
+                            <h4 style={{ fontSize: '14px', fontWeight: '800', color: '#065F46', margin: 0, lineHeight: 1.2 }}>
+                                You're covered!
+                            </h4>
+                            <p style={{ fontSize: '11.5px', color: '#047857', margin: '3px 0 0', lineHeight: 1.3 }}>
+                                Enjoy all premium enterprise features without interruption.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -2951,6 +3109,106 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                             >
                                 Close
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── SYSTEM PAYMENT CHECKOUT MODAL ── */}
+            {showSystemModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(8px)',
+                    zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                }}>
+                    <div style={{
+                        background: '#FFFFFF', borderRadius: '20px', maxWidth: '440px', width: '100%',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)', overflow: 'hidden',
+                        border: '1px solid #E2E8F0'
+                    }}>
+                        <div style={{
+                            background: 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)', color: '#FFFFFF',
+                            padding: '22px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                        }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <h4 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#FFFFFF' }}>
+                                        System Payment
+                                    </h4>
+                                    <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>
+                                        DIRECT
+                                    </span>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#BFDBFE', marginTop: '3px' }}>
+                                    Internal Enterprise Billing Settlement
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { if (!processingSystemPayment) setShowSystemModal(false); }}
+                                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#FFFFFF', width: '30px', height: '30px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '22px 24px' }}>
+                            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '18px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '13px', color: '#64748B' }}>Plan:</span>
+                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#0F172A' }}>INFY-POS PREMIUM</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '13px', color: '#64748B' }}>Duration:</span>
+                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#16A34A' }}>+30 Days Extension</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '13px', color: '#64748B' }}>Amount:</span>
+                                    <span style={{ fontSize: '16px', fontWeight: '800', color: '#0F172A' }}>₹499 INR</span>
+                                </div>
+                                <div style={{ borderTop: '1px dashed #CBD5E1', paddingTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: '12px', color: '#64748B' }}>Provider:</span>
+                                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#2563EB' }}>INFY-POS System Engine</span>
+                                </div>
+                            </div>
+
+                            <p style={{ fontSize: '12.5px', color: '#64748B', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+                                By confirming, ₹499 will be settled via INFY-POS System Payment. Your license will be automatically extended for 30 days immediately.
+                            </p>
+
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSystemModal(false)}
+                                    disabled={processingSystemPayment}
+                                    style={{
+                                        flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #CBD5E1',
+                                        background: '#FFFFFF', color: '#334155', fontWeight: '600', fontSize: '13px',
+                                        cursor: processingSystemPayment ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmSystemPayment}
+                                    disabled={processingSystemPayment}
+                                    style={{
+                                        flex: 2, padding: '12px', borderRadius: '10px', border: 'none',
+                                        background: '#2563EB', color: '#FFFFFF', fontWeight: '700', fontSize: '13px',
+                                        cursor: processingSystemPayment ? 'not-allowed' : 'pointer',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                    }}
+                                >
+                                    {processingSystemPayment ? (
+                                        <>
+                                            <FontAwesomeIcon icon={faRotate} spin />
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        'Confirm & Extend (+30 Days)'
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -648,3 +648,30 @@ Route::post('/apply-update', function () {
     return response()->json(['success' => true]);
 });
 
+// ============================================================
+// Super Admin Payment Systems Control Center Endpoints
+// ============================================================
+Route::prefix('super-admin/payment-settings')->group(function () {
+    Route::get('/', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getSettings']);
+    Route::post('/provider', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'switchProvider']);
+    Route::post('/razorpay', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'saveRazorpay']);
+    Route::post('/razorpay/test', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'testRazorpay']);
+    Route::post('/system', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'saveSystemPayment']);
+    Route::get('/logs', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getLogs']);
+});
+
+Route::prefix('saas-admin/payment-settings')->group(function () {
+    Route::get('/', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getSettings']);
+    Route::post('/provider', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'switchProvider']);
+    Route::post('/razorpay', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'saveRazorpay']);
+    Route::post('/razorpay/test', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'testRazorpay']);
+    Route::post('/system', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'saveSystemPayment']);
+    Route::get('/logs', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getLogs']);
+});
+
+// Customer-facing authoritative payment provider routing & processing
+Route::prefix('payment')->group(function () {
+    Route::get('/provider', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'getCustomerProvider']);
+    Route::post('/system/process', [\App\Http\Controllers\API\SuperAdminPaymentController::class, 'processSystemPayment']);
+});
+
