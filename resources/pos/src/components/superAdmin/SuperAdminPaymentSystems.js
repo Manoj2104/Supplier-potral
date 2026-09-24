@@ -31,13 +31,33 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import './SuperAdminPortal.css';
 
+const DEFAULT_SETTINGS = {
+    id: 1,
+    active_provider: 'razorpay',
+    razorpay_enabled: true,
+    system_payment_enabled: false,
+    razorpay_mode: 'test',
+    razorpay_key_id: 'rzp_test_TfUvXTbtZxl0LL',
+    razorpay_key_secret_masked: '••••••••••••••••••••',
+    razorpay_has_key_secret: true,
+    razorpay_webhook_secret_masked: '••••••••••••••••••••',
+    razorpay_has_webhook_secret: true,
+    razorpay_plan_id: 'plan_INFYPOS_MONTHLY_499',
+    merchant_name: 'INFY-POS Enterprise',
+    system_payment_mode: 'system',
+    system_payment_verification: 'automatic',
+    currency: 'INR',
+    is_razorpay_configured: true,
+    webhook_url: (typeof window !== 'undefined' && window.location ? window.location.origin : 'http://127.0.0.1:8000') + '/api/webhooks/razorpay',
+};
+
 const SuperAdminPaymentSystems = () => {
     // Current Active Sub-Tab
     const [subTab, setSubTab] = useState('overview'); // 'overview' | 'razorpay' | 'system' | 'logs'
 
-    // Payment Settings State from Backend
-    const [settings, setSettings] = useState(null);
-    const [loading, setLoading] = useState(true);
+    // Payment Settings State from Backend (Pre-seeded with instant 0ms defaults)
+    const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+    const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [toast, setToast] = useState(null);
 
@@ -55,7 +75,7 @@ const SuperAdminPaymentSystems = () => {
     // Razorpay Form Edit State
     const [rzpForm, setRzpForm] = useState({
         razorpay_mode: 'test',
-        razorpay_key_id: '',
+        razorpay_key_id: 'rzp_test_TfUvXTbtZxl0LL',
         razorpay_key_secret: '',
         razorpay_webhook_secret: '',
         razorpay_plan_id: 'plan_INFYPOS_MONTHLY_499',
@@ -282,9 +302,9 @@ const SuperAdminPaymentSystems = () => {
         setTimeout(() => setCopiedUrl(false), 2000);
     };
 
-    if (loading) {
+    if (loading && !settings) {
         return (
-            <div className="sa-main-content d-flex align-items-center justify-content-center" style={{ minHeight: '60vh' }}>
+            <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '60vh', width: '100%' }}>
                 <div style={{ textAlign: 'center' }}>
                     <FontAwesomeIcon icon={faSpinner} spin style={{ fontSize: '32px', color: '#16A34A', marginBottom: '14px' }} />
                     <div style={{ fontSize: '15px', fontWeight: 600, color: '#475569' }}>Loading Payment Systems Control Center...</div>
@@ -293,12 +313,12 @@ const SuperAdminPaymentSystems = () => {
         );
     }
 
-    const activeProvider = settings?.active_provider || 'none';
-    const isRazorpayActive = activeProvider === 'razorpay' && settings?.razorpay_enabled;
-    const isSystemActive = activeProvider === 'system' && settings?.system_payment_enabled;
+    const activeProvider = String(settings?.active_provider || 'razorpay').toLowerCase();
+    const isRazorpayActive = activeProvider === 'razorpay' && (settings?.razorpay_enabled === undefined || Boolean(settings?.razorpay_enabled));
+    const isSystemActive = activeProvider === 'system' && Boolean(settings?.system_payment_enabled);
 
     return (
-        <div className="sa-main-content">
+        <div className="sa-payment-systems-page" style={{ width: '100%', boxSizing: 'border-box' }}>
             {/* Toast Notification */}
             {toast && (
                 <div style={{
@@ -323,12 +343,29 @@ const SuperAdminPaymentSystems = () => {
                 </div>
             )}
 
+            {/* Breadcrumb matching Enterprise Super Admin */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12.5px',
+                color: '#64748B',
+                marginBottom: '14px',
+                fontWeight: 500
+            }}>
+                <span>Dashboard</span>
+                <span>/</span>
+                <span>Super Admin</span>
+                <span>/</span>
+                <span style={{ color: '#16A34A', fontWeight: 700 }}>Payment Systems</span>
+            </div>
+
             {/* Header */}
             <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: '24px',
+                marginBottom: '20px',
                 flexWrap: 'wrap',
                 gap: '16px',
             }}>
@@ -337,7 +374,7 @@ const SuperAdminPaymentSystems = () => {
                         fontSize: '24px',
                         fontWeight: 800,
                         color: '#0F172A',
-                        margin: '0 0 6px 0',
+                        margin: '0 0 4px 0',
                         letterSpacing: '-0.025em',
                     }}>
                         Payment Systems
@@ -347,7 +384,7 @@ const SuperAdminPaymentSystems = () => {
                         color: '#64748B',
                         margin: 0,
                     }}>
-                        Configure and control the payment provider used across INFY-POS.
+                        Configure and control the active payment gateway used across INFY-POS customer subscriptions.
                     </p>
                 </div>
 
@@ -368,6 +405,7 @@ const SuperAdminPaymentSystems = () => {
                             alignItems: 'center',
                             gap: '8px',
                             boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                            cursor: 'pointer'
                         }}
                     >
                         <FontAwesomeIcon icon={faRotate} spin={refreshing} />
@@ -385,27 +423,28 @@ const SuperAdminPaymentSystems = () => {
                     : 'linear-gradient(135deg, #7F1D1D 0%, #991B1B 100%)',
                 color: '#FFFFFF',
                 borderRadius: '16px',
-                padding: '24px 28px',
-                marginBottom: '28px',
+                padding: '20px 24px',
+                marginBottom: '22px',
                 boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.15)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 flexWrap: 'wrap',
-                gap: '20px',
+                gap: '16px',
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <div style={{
-                        width: '54px',
-                        height: '54px',
+                        width: '50px',
+                        height: '50px',
                         borderRadius: '14px',
                         background: 'rgba(255, 255, 255, 0.12)',
                         backdropFilter: 'blur(8px)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '24px',
+                        fontSize: '22px',
                         color: '#FFFFFF',
+                        flexShrink: 0
                     }}>
                         <FontAwesomeIcon icon={isRazorpayActive ? faCreditCard : isSystemActive ? faWallet : faExclamationTriangle} />
                     </div>
@@ -414,7 +453,7 @@ const SuperAdminPaymentSystems = () => {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '8px',
-                            fontSize: '11.5px',
+                            fontSize: '11px',
                             fontWeight: 800,
                             letterSpacing: '0.08em',
                             textTransform: 'uppercase',
@@ -432,48 +471,73 @@ const SuperAdminPaymentSystems = () => {
                             ACTIVE PAYMENT PROVIDER
                         </div>
                         <h2 style={{
-                            fontSize: '22px',
+                            fontSize: '20px',
                             fontWeight: 800,
-                            margin: '0 0 4px 0',
+                            margin: '0 0 3px 0',
                             color: '#FFFFFF',
                         }}>
                             {isRazorpayActive ? 'Razorpay Payment' : isSystemActive ? 'System Payment' : 'Payments Temporarily Disabled'}
                         </h2>
                         <p style={{
                             fontSize: '13px',
-                            color: 'rgba(255, 255, 255, 0.8)',
+                            color: 'rgba(255, 255, 255, 0.85)',
                             margin: 0,
+                            lineHeight: 1.4
                         }}>
                             {isRazorpayActive
-                                ? `Online customer payments are processed securely through Razorpay (${settings?.razorpay_mode === 'live' ? 'Live Production' : 'Sandbox Test Mode'}).`
+                                ? `Online customer payments are processed securely through Razorpay (${settings?.razorpay_mode === 'live' ? 'Live Production' : 'Sandbox Test Mode'}). Instant 0ms checkout.`
                                 : isSystemActive
-                                ? 'Customer subscription payments use the built-in INFY-POS System Payment processing engine.'
+                                ? 'Customer subscription payments use the built-in INFY-POS System Payment processing engine. Instant license generation.'
                                 : 'No payment provider is currently active. Customer payments will show payment temporarily unavailable.'}
                         </p>
                     </div>
                 </div>
 
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    padding: '8px 16px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>Gateway Status:</span>
-                    <span style={{
-                        fontSize: '13px',
-                        fontWeight: 800,
-                        color: '#FFFFFF',
-                        display: 'inline-flex',
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    {!isRazorpayActive && !isSystemActive && (
+                        <button
+                            type="button"
+                            onClick={() => promptSwitchProvider('razorpay')}
+                            style={{
+                                background: '#FFFFFF',
+                                color: '#991B1B',
+                                border: 'none',
+                                padding: '8px 16px',
+                                borderRadius: '10px',
+                                fontWeight: 700,
+                                fontSize: '12.5px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            <FontAwesomeIcon icon={faBolt} />
+                            Activate Razorpay
+                        </button>
+                    )}
+                    <div style={{
+                        display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '8px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        padding: '7px 14px',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
                     }}>
-                        <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981' }} />
-                        OPERATIONAL
-                    </span>
+                        <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>Gateway Status:</span>
+                        <span style={{
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            color: '#FFFFFF',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                        }}>
+                            <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#10B981' }} />
+                            OPERATIONAL
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -539,80 +603,85 @@ const SuperAdminPaymentSystems = () => {
                                 : '0 1px 3px rgba(0,0,0,0.03)',
                             position: 'relative',
                             transition: 'all 0.2s ease',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            minHeight: '390px',
                         }}>
-                            {isRazorpayActive && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '16px',
-                                    right: '16px',
-                                    background: '#DCFCE7',
-                                    color: '#15803D',
-                                    fontWeight: 800,
-                                    fontSize: '11px',
-                                    padding: '4px 10px',
-                                    borderRadius: '20px',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.04em',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                }}>
-                                    <FontAwesomeIcon icon={faCheckCircle} /> ACTIVE
-                                </div>
-                            )}
+                            <div>
+                                {isRazorpayActive && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '16px',
+                                        right: '16px',
+                                        background: '#DCFCE7',
+                                        color: '#15803D',
+                                        fontWeight: 800,
+                                        fontSize: '11px',
+                                        padding: '4px 10px',
+                                        borderRadius: '20px',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.04em',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                    }}>
+                                        <FontAwesomeIcon icon={faCheckCircle} /> ACTIVE
+                                    </div>
+                                )}
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+                                    <div style={{
+                                        width: '46px',
+                                        height: '46px',
+                                        borderRadius: '12px',
+                                        background: '#EFF6FF',
+                                        color: '#2563EB',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '20px',
+                                    }}>
+                                        <FontAwesomeIcon icon={faCreditCard} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '0 0 2px 0' }}>
+                                            RAZORPAY PAYMENT
+                                        </h3>
+                                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748B' }}>
+                                            Mode: {settings?.razorpay_mode === 'live' ? 'Live (Production)' : 'Test Mode (Sandbox)'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <p style={{ fontSize: '13.5px', color: '#475569', lineHeight: 1.5, marginBottom: '18px' }}>
+                                    Process customer payments securely through Razorpay.
+                                </p>
+
                                 <div style={{
-                                    width: '46px',
-                                    height: '46px',
+                                    background: '#F8FAFC',
                                     borderRadius: '12px',
-                                    background: '#EFF6FF',
-                                    color: '#2563EB',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '20px',
+                                    padding: '14px 16px',
+                                    marginBottom: '20px',
                                 }}>
-                                    <FontAwesomeIcon icon={faCreditCard} />
-                                </div>
-                                <div>
-                                    <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '0 0 2px 0' }}>
-                                        RAZORPAY PAYMENT
-                                    </h3>
-                                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748B' }}>
-                                        Mode: {settings?.razorpay_mode === 'live' ? 'Live (Production)' : 'Test Mode (Sandbox)'}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <p style={{ fontSize: '13.5px', color: '#475569', lineHeight: 1.5, marginBottom: '20px' }}>
-                                Process customer payments securely through Razorpay.
-                            </p>
-
-                            <div style={{
-                                background: '#F8FAFC',
-                                borderRadius: '12px',
-                                padding: '14px 16px',
-                                marginBottom: '24px',
-                            }}>
-                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
-                                    SUPPORTED FEATURES:
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                    {[
-                                        'UPI',
-                                        'Credit / Debit Cards',
-                                        'Net Banking',
-                                        'Wallets',
-                                        'Recurring Payments',
-                                        'Auto-Renewal',
-                                        'Razorpay Webhooks',
-                                    ].map(f => (
-                                        <div key={f} style={{ fontSize: '12.5px', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <FontAwesomeIcon icon={faCheck} style={{ color: '#16A34A', fontSize: '11px' }} />
-                                            <span>{f}</span>
-                                        </div>
-                                    ))}
+                                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
+                                        SUPPORTED FEATURES:
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                        {[
+                                            'UPI & Instant QR',
+                                            'Credit / Debit Cards',
+                                            'Net Banking (All Banks)',
+                                            'Digital Wallets',
+                                            'Recurring Auto-Renewal',
+                                            'Razorpay Webhooks',
+                                        ].map(f => (
+                                            <div key={f} style={{ fontSize: '12.5px', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <FontAwesomeIcon icon={faCheck} style={{ color: '#16A34A', fontSize: '11px' }} />
+                                                <span>{f}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
 
@@ -623,9 +692,27 @@ const SuperAdminPaymentSystems = () => {
                                 paddingTop: '16px',
                                 borderTop: '1px solid #F1F5F9',
                             }}>
-                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
-                                    Provider Status:
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
+                                        Provider Status:
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSubTab('razorpay')}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#2563EB',
+                                            fontSize: '12px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            textDecoration: 'underline'
+                                        }}
+                                    >
+                                        Configure →
+                                    </button>
+                                </div>
                                 <button
                                     type="button"
                                     onClick={() => promptSwitchProvider(isRazorpayActive ? 'system' : 'razorpay')}
@@ -667,77 +754,85 @@ const SuperAdminPaymentSystems = () => {
                                 : '0 1px 3px rgba(0,0,0,0.03)',
                             position: 'relative',
                             transition: 'all 0.2s ease',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            minHeight: '390px',
                         }}>
-                            {isSystemActive && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '16px',
-                                    right: '16px',
-                                    background: '#DCFCE7',
-                                    color: '#15803D',
-                                    fontWeight: 800,
-                                    fontSize: '11px',
-                                    padding: '4px 10px',
-                                    borderRadius: '20px',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.04em',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                }}>
-                                    <FontAwesomeIcon icon={faCheckCircle} /> ACTIVE
-                                </div>
-                            )}
+                            <div>
+                                {isSystemActive && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '16px',
+                                        right: '16px',
+                                        background: '#DCFCE7',
+                                        color: '#15803D',
+                                        fontWeight: 800,
+                                        fontSize: '11px',
+                                        padding: '4px 10px',
+                                        borderRadius: '20px',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.04em',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                    }}>
+                                        <FontAwesomeIcon icon={faCheckCircle} /> ACTIVE
+                                    </div>
+                                )}
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+                                    <div style={{
+                                        width: '46px',
+                                        height: '46px',
+                                        borderRadius: '12px',
+                                        background: '#F0FDF4',
+                                        color: '#16A34A',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '20px',
+                                    }}>
+                                        <FontAwesomeIcon icon={faWallet} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '0 0 2px 0' }}>
+                                            SYSTEM PAYMENT
+                                        </h3>
+                                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748B' }}>
+                                            Mode: Built-in Internal Engine
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <p style={{ fontSize: '13.5px', color: '#475569', lineHeight: 1.5, marginBottom: '18px' }}>
+                                    Use the built-in INFY-POS payment processing system.
+                                </p>
+
                                 <div style={{
-                                    width: '46px',
-                                    height: '46px',
+                                    background: '#F8FAFC',
                                     borderRadius: '12px',
-                                    background: '#F0FDF4',
-                                    color: '#16A34A',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '20px',
+                                    padding: '14px 16px',
+                                    marginBottom: '20px',
                                 }}>
-                                    <FontAwesomeIcon icon={faWallet} />
-                                </div>
-                                <div>
-                                    <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '0 0 2px 0' }}>
-                                        SYSTEM PAYMENT
-                                    </h3>
-                                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748B' }}>
-                                        Mode: Built-in Internal Engine
-                                    </span>
-                                </div>
-                            </div>
-
-                            <p style={{ fontSize: '13.5px', color: '#475569', lineHeight: 1.5, marginBottom: '20px' }}>
-                                Use the built-in INFY-POS payment processing system.
-                            </p>
-
-                            <div style={{
-                                background: '#F8FAFC',
-                                borderRadius: '12px',
-                                padding: '14px 16px',
-                                marginBottom: '24px',
-                            }}>
-                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
-                                    SUPPORTED FEATURES:
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                    {[
-                                        'Internal Payment Flow',
-                                        'Manual/System Payment',
-                                        'Local Payment Processing',
-                                        'Internal Verification',
-                                    ].map(f => (
-                                        <div key={f} style={{ fontSize: '12.5px', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <FontAwesomeIcon icon={faCheck} style={{ color: '#16A34A', fontSize: '11px' }} />
-                                            <span>{f}</span>
-                                        </div>
-                                    ))}
+                                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
+                                        SUPPORTED FEATURES:
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                        {[
+                                            'Internal Payment Flow',
+                                            'Manual / System Payment',
+                                            'Direct Store Settlement',
+                                            'Internal Verification',
+                                            'Instant License (+30D)',
+                                            'Zero Gateway Fees (0%)',
+                                        ].map(f => (
+                                            <div key={f} style={{ fontSize: '12.5px', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <FontAwesomeIcon icon={faCheck} style={{ color: '#16A34A', fontSize: '11px' }} />
+                                                <span>{f}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
 
@@ -748,9 +843,27 @@ const SuperAdminPaymentSystems = () => {
                                 paddingTop: '16px',
                                 borderTop: '1px solid #F1F5F9',
                             }}>
-                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
-                                    Provider Status:
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
+                                        Provider Status:
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSubTab('system')}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#2563EB',
+                                            fontSize: '12px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            textDecoration: 'underline'
+                                        }}
+                                    >
+                                        Configure →
+                                    </button>
+                                </div>
                                 <button
                                     type="button"
                                     onClick={() => promptSwitchProvider(isSystemActive ? 'razorpay' : 'system')}
