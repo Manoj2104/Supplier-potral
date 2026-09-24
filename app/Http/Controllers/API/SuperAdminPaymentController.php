@@ -193,22 +193,44 @@ class SuperAdminPaymentController extends Controller
             $company->auto_renew           = 1;
             $company->save();
 
-            // 2. Update ActivationKey
-            $activeKey = ActivationKey::where('company_id', $company->id)->where('status', 'active')->latest('id')->first();
-            if ($activeKey) {
-                $activeKey->expires_at = $newEndsAt;
-                $activeKey->save();
-            } else {
-                $activeKey = ActivationKey::create([
-                    'company_id'          => $company->id,
-                    'key_code'            => 'INFYPOS-2026-SYS-' . strtoupper(substr(md5(uniqid()), 0, 8)),
-                    'plan_name'           => 'INFY-POS PREMIUM',
-                    'price'               => 499.00,
-                    'status'              => 'active',
-                    'activated_at'        => $now,
-                    'expires_at'          => $newEndsAt,
-                ]);
-            }
+            // 2. AUTO-DELETE old expired keys and create brand-new active key
+            ActivationKey::where('company_id', $company->id)->delete();
+            $newKeyCode = 'INFYPOS-2026-KEY-' . strtoupper(substr(md5(uniqid('key_', true) . microtime()), 0, 8));
+            $activeKey = ActivationKey::create([
+                'company_id'          => $company->id,
+                'key_code'            => $newKeyCode,
+                'plan_name'           => 'INFY-POS PREMIUM',
+                'price'               => 499.00,
+                'status'              => 'active',
+                'activated_at'        => $now,
+                'expires_at'          => $newEndsAt,
+                'machine_fingerprint' => \App\Services\LicenseGuardService::getLocalMachineGuid(),
+            ]);
+
+            try {
+                $cloudComp = \App\Services\CloudLicenseServerService::findCompanyRecord($company);
+                if ($cloudComp && !empty($cloudComp['id'])) {
+                    $cloudCompanyId = (int)$cloudComp['id'];
+                    \App\Services\CloudLicenseServerService::supabaseRequest('/activation_keys?company_id=eq.' . $cloudCompanyId, 'DELETE');
+                    \App\Services\CloudLicenseServerService::supabaseRequest('/companies?id=eq.' . $cloudCompanyId, 'PATCH', [
+                        'status'               => 'active',
+                        'subscription_ends_at' => $newEndsAt->toIso8601String(),
+                        'updated_at'           => date('c'),
+                    ]);
+                    \App\Services\CloudLicenseServerService::supabaseRequest('/activation_keys', 'POST', [
+                        'key_code'            => $newKeyCode,
+                        'company_id'          => $cloudCompanyId,
+                        'plan_name'           => 'INFY-POS PREMIUM (₹499/mo)',
+                        'price'               => 499.00,
+                        'status'              => 'active',
+                        'machine_fingerprint' => \App\Services\LicenseGuardService::getLocalMachineGuid(),
+                        'activated_at'        => $now->toIso8601String(),
+                        'expires_at'          => $newEndsAt->toIso8601String(),
+                        'created_at'          => date('c'),
+                        'updated_at'          => date('c'),
+                    ]);
+                }
+            } catch (\Throwable $cloudEx) {}
 
             // 3. Update Enterprise License & Subscription
             $license = EnterpriseLicenseService::ensureCurrentLicense();
@@ -226,6 +248,7 @@ class SuperAdminPaymentController extends Controller
 
             // 4. Record Payment in SubscriptionPayment
             $sysPaymentId = 'SYS-PAY-' . strtoupper(Str::random(12));
+            $payMethod = strtoupper($request->input('method', 'UPI'));
             $paymentRecord = SubscriptionPayment::create([
                 'user_id'             => 1,
                 'company_id'          => $company->id,
@@ -236,12 +259,13 @@ class SuperAdminPaymentController extends Controller
                 'amount'              => 499.00,
                 'currency'            => 'INR',
                 'status'              => 'SUCCESS',
-                'method'              => 'SYSTEM',
+                'method'              => $payMethod,
                 'email'               => $company->email ?: 'admin@infypos.local',
                 'contact'             => $company->phone ?: '9876543210',
                 'captured_at'         => $now,
                 'raw_reference'       => json_encode([
                     'provider'      => 'system',
+                    'method'        => $payMethod,
                     'verified_by'   => 'Internal System Engine',
                     'verification'  => 'automatic',
                     'extended_days' => 30,
@@ -255,6 +279,7 @@ class SuperAdminPaymentController extends Controller
             PaymentControlService::recordAudit('system_payment_processed', [
                 'payment_id'    => $sysPaymentId,
                 'amount'        => 499.00,
+                'method'        => $payMethod,
                 'extended_days' => 30,
                 'expires_at'    => $newEndsAt->toIso8601String(),
             ]);
