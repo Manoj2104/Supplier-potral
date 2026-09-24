@@ -96,12 +96,12 @@ class SaaSController extends Controller
             $isExpiredStatus = false;
 
             // ── STEP 1: LIVE CLOUD REAL-TIME SYNCHRONIZATION (SUPABASE MASTER CLOUD ENGINE) ──
-            // Throttled to 3 seconds max (or 0s if forced) to allow lightning-fast 0ms sync when Super Admin expires a key
             $forceCheck = $request->has('force_cloud_check') || $request->input('force') == '1';
             $cacheKey = 'cloud_license_check_lock_' . $company->id;
             $shouldCheckCloud = $forceCheck || !\Illuminate\Support\Facades\Cache::has($cacheKey);
 
             if ($shouldCheckCloud) {
+                \Illuminate\Support\Facades\Cache::put($cacheKey, true, 300); // 5-minute cache buffer
                 try {
                     $syncResult = \App\Services\CloudLicenseServerService::syncCloudSubscription($company, $forceCheck);
                     if (!empty($syncResult['success']) && ($syncResult['status'] ?? '') === 'expired') {

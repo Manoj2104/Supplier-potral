@@ -141,9 +141,24 @@ KwIDAQAB
      */
     public static function getMachineHash(): string
     {
+        $hashFile = 'C:\\ProgramData\\INFY-POS Enterprise\\machine.hash';
+        if (file_exists($hashFile)) {
+            $h = trim(@file_get_contents($hashFile));
+            if (!empty($h) && strlen($h) === 64) {
+                return $h;
+            }
+        }
+
         $guid = LicenseGuardService::getLocalMachineGuid();
         $machineSha = MachineLockService::getMachineId();
-        return hash('sha256', strtoupper($guid . '|' . $machineSha . '|' . php_uname('n')));
+        $hash = hash('sha256', strtoupper($guid . '|' . $machineSha . '|' . php_uname('n')));
+
+        try {
+            @mkdir(dirname($hashFile), 0777, true);
+            @file_put_contents($hashFile, $hash);
+        } catch (\Throwable $e) {}
+
+        return $hash;
     }
 
     /**
@@ -397,10 +412,12 @@ KwIDAQAB
             ];
         }
 
-        // 1B. Authoritative Cloud Synchronization (throttled by 3s cache)
-        try {
-            CloudLicenseServerService::syncCloudSubscription();
-        } catch (\Throwable $cloudEx) {}
+        // 1B. Authoritative Cloud Synchronization (only sync if force requested)
+        if (request() && (request()->has('force') || request()->has('sync'))) {
+            try {
+                CloudLicenseServerService::syncCloudSubscription(null, true);
+            } catch (\Throwable $cloudEx) {}
+        }
 
         // 2. Fetch License and Subscription
         $license = self::ensureCurrentLicense();

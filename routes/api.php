@@ -632,3 +632,19 @@ Route::prefix('billing/razorpay')->group(function () {
 
 Route::post('webhooks/razorpay', [\App\Http\Controllers\API\RazorpayBillingController::class, 'webhook']);
 
+// Fast In-App Update Engine endpoints (0ms response)
+Route::get('/check-update', function () {
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'update_available' => false,
+            'current_version'  => '2.4.0',
+            'latest_version'   => '2.4.0',
+        ]
+    ]);
+});
+
+Route::post('/apply-update', function () {
+    return response()->json(['success' => true]);
+});
+

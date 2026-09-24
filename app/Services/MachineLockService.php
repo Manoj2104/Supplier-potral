@@ -30,7 +30,14 @@ class MachineLockService
             return self::$cachedMachineId;
         }
 
-        $parts = [];
+        $cacheFile = self::$lockDir . '\\machine_fingerprint.dat';
+        if (file_exists($cacheFile)) {
+            $cached = trim(@file_get_contents($cacheFile));
+            if (!empty($cached) && strlen($cached) === 64) {
+                self::$cachedMachineId = $cached;
+                return self::$cachedMachineId;
+            }
+        }
 
         try {
             // MAC Address (most stable identifier)
@@ -87,6 +94,10 @@ class MachineLockService
         // Filter empty, combine, hash
         $fingerprint = implode('|', array_filter($parts));
         self::$cachedMachineId = hash('sha256', $fingerprint ?: 'fallback-' . gethostname());
+        try {
+            @mkdir(self::$lockDir, 0777, true);
+            @file_put_contents($cacheFile, self::$cachedMachineId);
+        } catch (\Throwable $e) {}
         return self::$cachedMachineId;
     }
 
