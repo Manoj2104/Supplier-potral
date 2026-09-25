@@ -115,10 +115,13 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
     const [toastMsg, setToastMsg] = useState(null);
 
     // Server-Authoritative Active Payment Provider State
-    const [providerInfo, setProviderInfo] = useState({
-        provider: 'razorpay',
-        razorpay_enabled: true,
-        system_payment_enabled: false,
+    // ⚡ 0ms INSTANT: Read from localStorage cache so first click routes correctly without API wait
+    const [providerInfo, setProviderInfo] = useState(() => {
+        try {
+            const cached = localStorage.getItem('infypos_active_provider');
+            if (cached) return JSON.parse(cached);
+        } catch (e) {}
+        return { provider: 'razorpay', razorpay_enabled: true, system_payment_enabled: false };
     });
     const [showSystemModal, setShowSystemModal] = useState(false);
     const [systemUpiData, setSystemUpiData] = useState(null);
@@ -130,6 +133,8 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
     const [submittedDetails, setSubmittedDetails] = useState(null);
     const [submittingPayment, setSubmittingPayment] = useState(false);
     const upiFileInputRef = useRef(null);
+    // ⚡ Pre-fetched UPI data ref — holds initiated payment data before modal opens
+    const prefetchedUpiRef = useRef(null);
 
     // Duplicate Payment Prevention & Active Plan Warning States
     const [showActiveWarningModal, setShowActiveWarningModal] = useState(false);
@@ -240,10 +245,26 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         try {
             const res = await axios.get('/api/payment/provider');
             if (res.data && res.data.success && res.data.data) {
-                setProviderInfo(res.data.data);
+                const data = res.data.data;
+                setProviderInfo(data);
+                // ⚡ Cache for instant 0ms routing on next click
+                try { localStorage.setItem('infypos_active_provider', JSON.stringify(data)); } catch (e) {}
             }
         } catch (err) {
             console.warn('Could not fetch active payment provider:', err);
+        }
+    };
+
+    // ⚡ BACKGROUND PRE-FETCH: Silently initiate UPI payment data so QR is ready when modal opens
+    const prefetchSystemUpiData = async () => {
+        if (prefetchedUpiRef.current || loadingUpiData) return;
+        try {
+            const res = await axios.post('/api/payment/system/initiate');
+            if (res.data && res.data.success) {
+                prefetchedUpiRef.current = res.data;
+            }
+        } catch (e) {
+            // silent background pre-fetch — fail gracefully
         }
     };
 
@@ -260,6 +281,14 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         initLicenseSdk();
         fetchSubscriptionStatus();
         fetchPaymentProvider();
+        // ⚡ 0ms: If cached provider is 'system', pre-fetch UPI data immediately on mount
+        // so the QR is already ready when user clicks Renew (true 0ms modal open!)
+        try {
+            const cached = localStorage.getItem('infypos_active_provider');
+            if (cached && JSON.parse(cached)?.provider === 'system') {
+                setTimeout(() => prefetchSystemUpiData(), 200); // slight delay to not block first paint
+            }
+        } catch (e) {}
 
         // ⚡ 0ms INSTANT EVENT LISTENER — updates timer and state immediately without lag
         const handleStatusUpdate = (e) => {
@@ -723,8 +752,12 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
             return;
         }
 
-        // Direct System Payment Gateway
+        // Direct System Payment Gateway — opens modal at TRUE 0ms
         if (currentProvider === 'system') {
+            // ⚡ If pre-fetched data is ready, inject it immediately for instant QR display
+            if (prefetchedUpiRef.current) {
+                setSystemUpiData(prefetchedUpiRef.current);
+            }
             setShowSystemModal(true);
             return;
         }
@@ -859,9 +892,27 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
             setUtrInput('');
             setScreenshotFile(null);
             setScreenshotFileName('');
+            // ⚡ If we have pre-fetched data, use it instantly (0ms QR)!
+            if (prefetchedUpiRef.current) {
+                setSystemUpiData(prefetchedUpiRef.current);
+                const used = prefetchedUpiRef.current;
+                prefetchedUpiRef.current = null; // consume
+                // Pre-fetch next one silently in background for next modal open
+                setTimeout(() => prefetchSystemUpiData(), 1500);
+                return;
+            }
+            // Fallback: fetch now (shows default QR until this completes)
             initSystemUpiPayment();
         }
     }, [showSystemModal]);
+
+    // ⚡ PRE-FETCH UPI DATA: As soon as we know provider is 'system', silently pre-initiate
+    // so the QR code is ready before user even clicks Renew!
+    useEffect(() => {
+        if (providerInfo?.provider === 'system') {
+            prefetchSystemUpiData();
+        }
+    }, [providerInfo?.provider]);
 
     // Handle Completed Payment Submission (Strict Server-Authoritative)
     const handleCompletedPaymentSubmit = async (e) => {

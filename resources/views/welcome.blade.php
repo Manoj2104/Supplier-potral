@@ -9,7 +9,7 @@
         <!-- Preload Empty State Mascot & Package for 0ms instant display -->
         <link rel="preload" as="image" href="/images/pos_empty_manager.webp" type="image/webp" fetchpriority="high">
         <link rel="preload" as="image" href="/images/pos_empty_package.webp" type="image/webp" fetchpriority="high">
-        <link rel="preload" href="{{ mix('js/app.js') }}?v={{ file_exists(public_path('js/app.js')) ? filemtime(public_path('js/app.js')) : time() }}" as="script" fetchpriority="high">
+        <link rel="preload" href="{{ mix('js/app.js') }}" as="script" fetchpriority="high">
         <!-- Fonts (Non-blocking asynchronous load) -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -431,5 +431,5 @@
 
     </body>
 <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
-<script type="text/javascript" src="{{ mix('js/app.js') }}?v={{ file_exists(public_path('js/app.js')) ? filemtime(public_path('js/app.js')) : time() }}"></script>
+<script type="text/javascript" src="{{ mix('js/app.js') }}"></script>
 </html>
