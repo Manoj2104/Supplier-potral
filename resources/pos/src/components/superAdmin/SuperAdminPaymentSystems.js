@@ -280,10 +280,35 @@ const SuperAdminPaymentSystems = () => {
                 provider: switchModal.targetProvider,
             });
             if (res.data && res.data.success) {
-                setSettings(res.data.data);
+                const updatedSettings = res.data.data;
+                setSettings(updatedSettings);
                 showToast(`Payment provider switched to ${switchModal.targetLabel} successfully.`);
                 setSwitchModal({ open: false, targetProvider: null, targetLabel: '', switching: false });
                 fetchLogs();
+
+                // ⚡ 0ms INSTANT LIVE BROADCAST ACROSS ALL PAGES & TABS WITHOUT RELOAD
+                const providerPayload = {
+                    provider: updatedSettings.active_provider,
+                    razorpay_enabled: Boolean(updatedSettings.razorpay_enabled),
+                    system_payment_enabled: Boolean(updatedSettings.system_payment_enabled),
+                    razorpay_key_id: updatedSettings.razorpay_key_id,
+                    merchant_name: updatedSettings.merchant_name,
+                    currency: updatedSettings.currency,
+                    timestamp: Date.now()
+                };
+
+                try {
+                    localStorage.setItem('infypos_active_provider', JSON.stringify(providerPayload));
+                    localStorage.setItem('infypos_provider_updated_at', String(Date.now()));
+                } catch (e) {}
+
+                try {
+                    const bc = new BroadcastChannel('infypos_payment_provider_channel');
+                    bc.postMessage({ type: 'PROVIDER_SWITCHED', data: providerPayload });
+                    bc.close();
+                } catch (e) {}
+
+                window.dispatchEvent(new CustomEvent('infypos:payment-provider-changed', { detail: providerPayload }));
             } else {
                 showToast(res.data?.message || 'Failed to switch payment provider', 'error');
                 setSwitchModal(prev => ({ ...prev, switching: false }));

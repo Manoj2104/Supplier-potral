@@ -135,6 +135,8 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
     const upiFileInputRef = useRef(null);
     // ⚡ Pre-fetched UPI data ref — holds initiated payment data before modal opens
     const prefetchedUpiRef = useRef(null);
+    // ⚡ Pre-fetched Razorpay session ref — holds pre-initiated checkout session for 0ms instant open
+    const prefetchedRazorpayRef = useRef(null);
 
     // Duplicate Payment Prevention & Active Plan Warning States
     const [showActiveWarningModal, setShowActiveWarningModal] = useState(false);
@@ -268,6 +270,20 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         }
     };
 
+    // ⚡ BACKGROUND PRE-FETCH: Silently initiate Razorpay subscription order so modal opens in 0ms!
+    const prefetchRazorpayData = async () => {
+        if (prefetchedRazorpayRef.current) return;
+        try {
+            await ensureRazorpayLoaded();
+            const res = await axios.post('/api/billing/razorpay/subscription');
+            if (res.data && res.data.success) {
+                prefetchedRazorpayRef.current = res.data;
+            }
+        } catch (e) {
+            // silent background pre-fetch
+        }
+    };
+
     // ── SERVER-AUTHORITATIVE MONOTONIC TIMER TICKER (EVERY SECOND) ──
     // Uses performance.now() elapsed ticks from server baseline.
     // Client clock manipulation (changing Windows date/time) cannot extend subscription!
@@ -281,14 +297,78 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         initLicenseSdk();
         fetchSubscriptionStatus();
         fetchPaymentProvider();
-        // ⚡ 0ms: If cached provider is 'system', pre-fetch UPI data immediately on mount
-        // so the QR is already ready when user clicks Renew (true 0ms modal open!)
+        // ⚡ 0ms: Pre-fetch based on cached provider so clicking Renew opens modal instantly (0ms)
         try {
             const cached = localStorage.getItem('infypos_active_provider');
-            if (cached && JSON.parse(cached)?.provider === 'system') {
-                setTimeout(() => prefetchSystemUpiData(), 200); // slight delay to not block first paint
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed?.provider === 'system') {
+                    setTimeout(() => prefetchSystemUpiData(), 150);
+                } else if (parsed?.provider === 'razorpay') {
+                    setTimeout(() => prefetchRazorpayData(), 150);
+                }
             }
         } catch (e) {}
+
+        // ⚡ REAL-TIME PAYMENT PROVIDER SYNCHRONIZATION (0ms across all tabs without reload)
+        const handleProviderUpdate = (newProviderData) => {
+            if (!newProviderData || !newProviderData.provider) return;
+            setProviderInfo(prev => {
+                if (prev?.provider === newProviderData.provider && prev?.razorpay_enabled === newProviderData.razorpay_enabled && prev?.system_payment_enabled === newProviderData.system_payment_enabled) {
+                    return prev;
+                }
+                return { ...prev, ...newProviderData };
+            });
+            try {
+                localStorage.setItem('infypos_active_provider', JSON.stringify(newProviderData));
+            } catch (e) {}
+
+            // Pre-fetch for the newly active provider immediately
+            if (newProviderData.provider === 'system') {
+                setTimeout(() => prefetchSystemUpiData(), 100);
+            } else if (newProviderData.provider === 'razorpay') {
+                setTimeout(() => prefetchRazorpayData(), 100);
+            }
+        };
+
+        // 1. BroadcastChannel across all browser tabs
+        let bc = null;
+        try {
+            bc = new BroadcastChannel('infypos_payment_provider_channel');
+            bc.onmessage = (event) => {
+                if (event.data?.type === 'PROVIDER_SWITCHED' && event.data?.data) {
+                    handleProviderUpdate(event.data.data);
+                }
+            };
+        } catch (e) {}
+
+        // 2. Storage event (fires in all other windows/tabs when localStorage changes)
+        const handleStorage = (e) => {
+            if (e.key === 'infypos_active_provider' && e.newValue) {
+                try {
+                    handleProviderUpdate(JSON.parse(e.newValue));
+                } catch (err) {}
+            }
+        };
+        window.addEventListener('storage', handleStorage);
+
+        // 3. Custom Event on same window
+        const handleCustomEvent = (e) => {
+            if (e.detail) {
+                handleProviderUpdate(e.detail);
+            }
+        };
+        window.addEventListener('infypos:payment-provider-changed', handleCustomEvent);
+
+        // 4. Lightweight heartbeat sync (every 3s) so even different browsers / devices update in near-realtime!
+        const providerHeartbeat = setInterval(async () => {
+            try {
+                const res = await axios.get('/api/payment/provider');
+                if (res.data && res.data.success && res.data.data) {
+                    handleProviderUpdate(res.data.data);
+                }
+            } catch (err) {}
+        }, 3000);
 
         // ⚡ 0ms INSTANT EVENT LISTENER — updates timer and state immediately without lag
         const handleStatusUpdate = (e) => {
@@ -380,6 +460,10 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
         const syncInterval = setInterval(fetchSubscriptionStatus, 30000);
 
         return () => {
+            if (bc) bc.close();
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('infypos:payment-provider-changed', handleCustomEvent);
+            clearInterval(providerHeartbeat);
             clearInterval(syncInterval);
             window.removeEventListener('infypos:subscription-updated', handleStatusUpdate);
             window.removeEventListener('infypos:license-updated', handleStatusUpdate);
@@ -759,6 +843,72 @@ const EnterpriseSubscriptionBanner = ({ onStatusChange }) => {
                 setSystemUpiData(prefetchedUpiRef.current);
             }
             setShowSystemModal(true);
+            return;
+        }
+
+        // ⚡ 0ms INSTANT RAZORPAY OPEN FLOW (Pre-fetched session)
+        if (prefetchedRazorpayRef.current && typeof window.Razorpay === 'function') {
+            const payData = prefetchedRazorpayRef.current;
+            prefetchedRazorpayRef.current = null; // consume session
+            // Silently prepare next session in background for subsequent clicks
+            setTimeout(() => prefetchRazorpayData(), 1500);
+
+            const options = {
+                key: payData.key_id,
+                order_id: payData.order_id,
+                subscription_id: payData.subscription_id || undefined,
+                amount: payData.amount || 49900,
+                currency: payData.currency || 'INR',
+                name: 'INFY-POS Enterprise',
+                description: `${payData.plan_name || 'INFY-POS PREMIUM'} (${payData.invoice_number || '30 Days'})`,
+                image: '/images/pos_subscription_hero.png',
+                prefill: payData.prefill || {
+                    name: subData?.owner_name || 'Administrator',
+                    email: subData?.email || 'admin@infypos.local',
+                    contact: subData?.phone || '',
+                },
+                theme: { color: '#059669' },
+                modal: {
+                    ondismiss: function () {
+                        setIsInitiatingPayment(false);
+                    }
+                },
+                handler: async function (response) {
+                    activateSubscriptionOptimistically0ms(response?.razorpay_payment_id, 'Razorpay / UPI / Cards');
+
+                    try {
+                        const verifyRes = await axios.post('/api/billing/razorpay/verify', {
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_order_id: response.razorpay_order_id || payData.order_id,
+                            razorpay_signature: response.razorpay_signature,
+                            razorpay_subscription_id: response.razorpay_subscription_id || payData.subscription_id,
+                            payment_method: 'Razorpay / UPI / Cards',
+                            sub_id: payData.sub_id,
+                            invoice_number: payData.invoice_number,
+                        });
+
+                        if (verifyRes.data && verifyRes.data.success) {
+                            applySubscriptionUpdate(verifyRes.data);
+                            notifyLicenseUpdate(verifyRes.data);
+                            setSubData(prev => ({ ...prev, ...verifyRes.data }));
+                            if (typeof onStatusChange === 'function') {
+                                onStatusChange(verifyRes.data);
+                            }
+                            await fetchPaymentProvider();
+                            await fetchSubscriptionStatus();
+                        }
+                    } catch (err) {
+                        console.warn('Background payment verification:', err);
+                    }
+                }
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (resp) {
+                alert('Payment Failed: ' + (resp.error?.description || 'Transaction was declined'));
+                setIsInitiatingPayment(false);
+            });
+            rzp.open();
             return;
         }
 
